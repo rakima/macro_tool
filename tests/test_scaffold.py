@@ -1,4 +1,5 @@
 from app import __version__
+from app.gui_main import run
 from app.main import main
 
 
@@ -31,3 +32,17 @@ def test_main_returns_failure_for_invalid_rules(tmp_path, capsys):
 
     captured = capsys.readouterr()
     assert "Invalid JSON" in captured.err
+
+
+def test_gui_entrypoint_adds_gui_argument(monkeypatch):
+    captured_args = []
+
+    def fake_main(args):
+        captured_args.extend(args)
+        return 0
+
+    monkeypatch.setattr("app.gui_main.main", fake_main)
+    monkeypatch.setattr("sys.argv", ["MacroTool.exe", "--rules", "rules.json"])
+
+    assert run() == 0
+    assert captured_args == ["--rules", "rules.json", "--gui"]

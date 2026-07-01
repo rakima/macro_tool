@@ -13,7 +13,7 @@ This project is being developed both as a practical personal tool and as a portf
 
 ## Status
 
-v0.1 is in active development.
+v0.1 is in active development. Packaged executables are alpha-quality experimental builds for prototype demos.
 
 Current implementation includes:
 
@@ -100,6 +100,26 @@ Run tests:
 ```bash
 python -m pytest
 ```
+
+## Build
+
+PyInstaller is included in the development dependencies.
+
+Build a Windows demo executable:
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+The executable is created at:
+
+```text
+dist/MacroTool/MacroTool.exe
+```
+
+The packaged executable starts the GUI by default. Packaged builds are currently experimental and intended for v0.1 prototype demos.
+
+GitHub Releases can be created from tags such as `v0.1.0-alpha.1`. The release workflow builds the Windows package in CI and attaches a zip archive as a release asset.
 
 ## Basic Usage
 
