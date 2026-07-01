@@ -23,6 +23,7 @@ macro_tool/
     main.py
     models.py
     storage.py
+    screenshot.py
     detector.py
     actions.py
     runner.py
@@ -78,6 +79,7 @@ v0.1ではdataclassを使う想定とする。
 - versionチェック
 - JSON構造の最低限の検証
 - モデルへの変換
+- 画像パスをルールJSONからの相対パスとして保存
 
 ### app.detector
 
@@ -92,6 +94,18 @@ v0.1ではdataclassを使う想定とする。
 - 検知結果の返却
 
 検知結果は、座標・検出スコア・検出矩形を持つ値として扱う。
+
+### app.screenshot
+
+スクリーンショット取得を担当する。
+
+主な責務:
+
+- PyAutoGUIによるスクリーンショット取得
+- 必要に応じたregion指定
+- Pillow/RGB画像からOpenCV/BGR配列への変換
+- マルチディスプレイ向けの仮想スクリーン原点の保持
+- スクリーンショット取得エラーの隠蔽
 
 ### app.actions
 
@@ -119,7 +133,8 @@ v0.1ではclickのみ対応する。
 - 実行ログの通知
 - 開始・停止状態の管理
 
-GUIを固まらせないため、PySide6のQThreadまたはQObject workerでバックグラウンド実行する。
+v0.1の初期実装ではPySide6のQTimerで短い周期の実行サイクルを回す。
+検知処理が重くなる場合は、PySide6のQThreadまたはQObject workerへ移す。
 
 ### app.ui.main_window
 
@@ -176,7 +191,8 @@ app.main
 ```text
 MainWindow
   -> runner.start(rules)
-  -> runner captures screen
+  -> screenshot captures screen
+  -> runner receives screenshot
   -> detector.match(rule, screenshot)
   -> actions.execute(rule.action, match)
   -> runner emits log/status
@@ -198,6 +214,7 @@ RuleEditor
 
 ```text
 ui -> runner -> detector
+runner -> screenshot
 ui -> storage -> models
 runner -> actions
 runner -> models
@@ -224,12 +241,13 @@ Main Thread:
   - button events
   - list updates
   - log view updates
+  - v0.1初期のQTimer実行サイクル
 
 Worker Thread:
-  - screenshot capture
-  - image matching
-  - cooldown checks
-  - action execution
+  - 将来的なscreenshot capture
+  - 将来的なimage matching
+  - 将来的なcooldown checks
+  - 将来的なaction execution
 ```
 
 WorkerからUIへは、PySide6のsignalを使って状態やログを通知する。
@@ -289,7 +307,7 @@ UIテストはv0.1では必須にしない。
 ## 検討メモ
 
 - imageのパスは、ルールJSONファイルからの相対パスとして扱うのが分かりやすい。
-- regionはv0.1では単一モニター前提とし、xとyは0以上にする。
+- regionはマルチディスプレイ環境を考慮し、xとyに負の座標を許可する。
 - スクリーンショット取得とクリック実行はPyAutoGUIに集約する。
 - OpenCVのテンプレートマッチングはdetector内に閉じ込め、UIから直接呼ばない。
 - 将来的にキーボード入力や複数アクションを追加する場合も、action.typeで分岐できる構造にする。

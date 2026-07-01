@@ -58,7 +58,7 @@ v0.1では以下を設計対象とする。
 | [ ] Rule B           | Image: start.png          |
 | [x] Rule C           | Region: 100,200 300x120   |
 |                      | Confidence: 0.85          |
-| [+ Add] [Edit]       | Cooldown: 1.5s            |
+| [+ Add] [Edit] [Del] | Cooldown: 1.5s            |
 +----------------------+---------------------------+
 | Log                                              |
 | 12:00:01 started                                |

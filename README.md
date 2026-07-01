@@ -1,73 +1,125 @@
 # Macro Tool
 
-Macro Tool is a planned desktop macro tool that detects images on the screen and runs actions such as mouse clicks.
+Macro Tool is a desktop image-recognition macro tool built with Python.
 
-This project replaces an older Go-based macro tool with a new Python GUI application. The goal is to build a tool that is practical for personal use while also keeping the codebase, UI, and documentation clear enough to present as a portfolio project.
-
-## Status
-
-This project is currently in the design phase.
-
-Implementation has not started yet. The current focus is to define the UI, rule format, and application architecture before writing the first version of the Python application.
-
-## Concept
-
-Traditional macro tools often rely on fixed coordinates, delays, and repeated loops.
-
-Macro Tool uses a different approach:
+Instead of replaying fixed coordinates and delays, it watches a selected screen region and runs an action when a configured image appears.
 
 ```text
 When a specified image appears inside a specified screen region,
-run the configured action.
+click the matched target.
 ```
 
-For v0.1, every rule must have a search region. This keeps image detection faster and reduces false positives.
+This project is being developed both as a practical personal tool and as a portfolio project. The codebase is intentionally kept small, readable, and easy to extend.
 
-Instead of using per-step delays, rules use `cooldown` to prevent repeated triggering.
+## Status
 
-## Planned Tech Stack
+v0.1 is in active development.
 
-- Python
-- PySide6 for the GUI
-- PyAutoGUI for screenshots and mouse actions
-- OpenCV for image detection
-- JSON for macro rule definitions
-- PyInstaller for packaging as an executable
+Current implementation includes:
 
-## v0.1 Scope
+- PySide6 desktop GUI
+- JSON rule loading and saving
+- Rule add, edit, and delete
+- Screen region selection
+- Multi-monitor region support
+- Relative image paths in `rules.json`
+- OpenCV template matching
+- Japanese filename support for template images
+- PyAutoGUI screenshot capture and mouse click execution
+- Cooldown-based repeated click prevention
+- Test detection without clicking
+- Timestamped runtime logs
 
-The first version focuses on a small but coherent image-detection macro workflow.
+## Demo
 
-Planned screens:
+The GIF below shows Macro Tool being used to detect and click an item that appears at random positions in another desktop application.
 
-- Main window
-- Rule editor
-- Region selector
+![Macro Tool demo](docs/assets/demo.gif)
 
-Planned main window features:
+The footage is used only as an example target application. Macro Tool itself is a general-purpose image-recognition macro tool and is not tied to a specific game.
 
-- Start
-- Stop
-- Test detection
-- Rule list
-- Log output
+## Screenshots
 
-Planned rule editor fields:
+Main window:
 
-- Rule name
-- Detection image
-- Search region
-- Confidence
-- Action
-- Cooldown
+![Main window](docs/assets/home.png)
+
+Rule editor:
+
+![Rule editor](docs/assets/rule.png)
+
+Runtime log:
+
+![Runtime log](docs/assets/execution.png)
+
+## Concept
+
+Traditional macro tools often rely on:
+
+- fixed coordinates
+- delays
+- repeated loops
+
+Macro Tool uses rule-based image detection instead:
+
+- each rule has a template image
+- each rule has a required search region
+- each rule has a confidence threshold
+- each rule has a cooldown
+- when the image is found, the configured click action runs
+
+Search regions are required in v0.1 to reduce false positives and keep detection fast.
+
+## Tech Stack
+
+- Python 3.11+
+- PySide6
+- PyAutoGUI
+- OpenCV
+- NumPy
+- JSON
+- pytest
+- PyInstaller planned for executable packaging
+
+## Quick Start
+
+Install dependencies:
+
+```bash
+pip install -e .[dev]
+```
+
+Run the application:
+
+```bash
+python -m app.main
+```
+
+Run tests:
+
+```bash
+python -m pytest
+```
+
+## Basic Usage
+
+1. Click `Add` to create a rule.
+2. Set a rule name.
+3. Choose a detection image.
+4. Use `Select` to choose the search region.
+5. Adjust confidence and cooldown.
+6. Save the rule.
+7. Use `Test Detection` to verify matching without clicking.
+8. Click `Start` to run the macro loop.
+9. Click `Stop` to stop execution.
 
 ## Rule Example
 
 ```json
 {
   "enabled": true,
-  "name": "Click start button",
-  "image": "images/start_button.png",
+  "name": "Click item",
+  "image": "image/item.png",
   "region": {
     "x": 100,
     "y": 200,
@@ -87,52 +139,70 @@ Planned rule editor fields:
 }
 ```
 
-## Design Documents
-
-- [UI design](docs/design.md)
-- [Rule schema](docs/rule_schema.md)
-- [Architecture](docs/architecture.md)
-
-## Planned Architecture
-
-The application is planned around small modules with clear responsibilities.
+## Project Structure
 
 ```text
 app/
   main.py
   models.py
   storage.py
+  screenshot.py
   detector.py
   actions.py
   runner.py
+  system.py
+  rule_operations.py
   ui/
     main_window.py
     rule_editor.py
     region_selector.py
+tests/
+docs/
 ```
 
 Main responsibility split:
 
 - `models`: rule data structures and validation
 - `storage`: JSON loading and saving
-- `detector`: image matching with OpenCV
-- `actions`: mouse actions through PyAutoGUI
+- `screenshot`: screenshot capture and virtual screen origin handling
+- `detector`: OpenCV template matching
+- `actions`: mouse action execution
 - `runner`: macro execution loop and cooldown handling
 - `ui`: PySide6 screens and user interaction
 
-## Not Planned for v0.1
+## Design Documents
 
-- Coordinate-only macro recording
-- Delay-based step execution
-- Multiple actions per rule
-- Conditional branching
-- Keyboard actions
+- [UI design](docs/design.md)
+- [Rule schema](docs/rule_schema.md)
+- [Architecture](docs/architecture.md)
+
+## v0.1 Scope
+
+In scope:
+
+- image-based click rules
+- required search regions
+- rule editing GUI
+- region selection GUI
+- JSON persistence
+- test detection
+- cooldown
+- basic execution logs
+
+Not planned for v0.1:
+
+- coordinate-only macro recording
+- delay-based step execution
+- multiple actions per rule
+- conditional branching
+- keyboard actions
 - OCR
-- Scheduling
-- Plugin system
+- scheduling
+- plugin system
 
-## Development Policy
+## Notes
 
-This project is intentionally developed in small steps.
-
-The priority is not the fastest possible implementation. The priority is a maintainable design, understandable code, and a UI that feels useful in daily use.
+- Template image paths are saved relative to `rules.json` when possible.
+- Negative region coordinates are allowed for multi-monitor setups.
+- The click action moves the mouse to the target, clicks, and then returns the cursor to its original position.
+- Some target applications may handle simulated mouse input differently from normal desktop applications.
