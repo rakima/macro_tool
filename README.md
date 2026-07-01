@@ -206,3 +206,7 @@ Not planned for v0.1:
 - Negative region coordinates are allowed for multi-monitor setups.
 - The click action moves the mouse to the target, clicks, and then returns the cursor to its original position.
 - Some target applications may handle simulated mouse input differently from normal desktop applications.
+
+## License
+
+This project is licensed under the MIT License.

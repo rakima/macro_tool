@@ -15,3 +15,7 @@ dist/
 *.egg-info/
 
 *.log
+
+# Local macro data
+rules.json
+image/
