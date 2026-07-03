@@ -232,6 +232,8 @@ Not planned for v0.1:
 - Negative region coordinates are allowed for multi-monitor setups.
 - The click action moves the mouse to the target, clicks, and then returns the cursor to its original position.
 - Some target applications may handle simulated mouse input differently from normal desktop applications.
+- Do not run rule files from untrusted sources.
+- When an enabled rule's search region overlaps the Macro Tool window, the app asks for confirmation before starting.
 
 ## License
 

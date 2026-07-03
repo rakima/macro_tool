@@ -1,5 +1,5 @@
 from app.models import RuleSet
-from app.ui.main_window import UiDependencyError
+from app.ui.main_window import UiDependencyError, rectangles_overlap
 
 import pytest
 
@@ -28,3 +28,11 @@ def test_import_qt_widgets_returns_required_widget_names_when_pyside6_is_availab
     assert "QListWidget" in qt
     assert "QPlainTextEdit" in qt
     assert "QTimer" in qt
+
+
+def test_rectangles_overlap_returns_true_when_areas_intersect():
+    assert rectangles_overlap((10, 10, 100, 100), (50, 50, 20, 20)) is True
+
+
+def test_rectangles_overlap_returns_false_when_areas_do_not_intersect():
+    assert rectangles_overlap((10, 10, 100, 100), (110, 10, 20, 20)) is False

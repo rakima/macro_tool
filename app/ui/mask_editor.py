@@ -214,7 +214,9 @@ def create_mask_editor(image_path: str | Path, output_path: str | Path | None = 
         def __init__(self, parent_widget=None) -> None:
             super().__init__(parent_widget)
             self.setWindowTitle("Edit Mask")
-            self.resize(min(source_image.width() + 60, 1000), min(source_image.height() + 140, 760))
+            viewport_width = min(source_image.width(), 960)
+            viewport_height = min(source_image.height(), 620)
+            self.resize(viewport_width + 46, viewport_height + 126)
             self.canvas = MaskCanvas(source_image)
             self.undo_shortcut = QShortcut(QKeySequence.Undo, self)
             self.undo_shortcut.activated.connect(self.canvas.undo)
@@ -259,6 +261,8 @@ def create_mask_editor(image_path: str | Path, output_path: str | Path | None = 
             scroll_area = QScrollArea()
             scroll_area.setWidget(self.canvas)
             scroll_area.setWidgetResizable(False)
+            scroll_area.setFixedSize(viewport_width + 4, viewport_height + 4)
+            scroll_area.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             layout.addWidget(scroll_area, 1)
 
             self.buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)

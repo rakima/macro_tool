@@ -22,6 +22,22 @@ class UiDependencyError(RuntimeError):
     """Raised when GUI dependencies are unavailable."""
 
 
+def rectangles_overlap(
+    first: tuple[int, int, int, int],
+    second: tuple[int, int, int, int],
+) -> bool:
+    """Return whether two x/y/width/height rectangles overlap."""
+    first_x, first_y, first_width, first_height = first
+    second_x, second_y, second_width, second_height = second
+
+    return (
+        first_x < second_x + second_width
+        and first_x + first_width > second_x
+        and first_y < second_y + second_height
+        and first_y + first_height > second_y
+    )
+
+
 def import_qt_widgets():
     try:
         from PySide6.QtWidgets import (  # type: ignore[import-not-found]
@@ -374,6 +390,8 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             if not enabled_rules:
                 self.append_log("No enabled rules to run.")
                 return
+            if not self._confirm_self_region_overlap(enabled_rules):
+                return
 
             from app.detector import TemplateDetector
             from app.screenshot import PyAutoGuiScreenshotProvider
@@ -390,6 +408,50 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 f"Macro started. enabled_rules={len(enabled_rules)}, interval={self.run_timer.interval()}ms"
             )
             self.run_timer.start()
+
+        def _confirm_self_region_overlap(self, enabled_rules) -> bool:
+            own_region = self._window_screen_region()
+            overlapping_rules = []
+            for rule in enabled_rules:
+                rule_region = (
+                    rule.region.x,
+                    rule.region.y,
+                    rule.region.width,
+                    rule.region.height,
+                )
+                if rectangles_overlap(own_region, rule_region):
+                    overlapping_rules.append(rule.name)
+
+            if not overlapping_rules:
+                return True
+
+            names = ", ".join(overlapping_rules[:5])
+            if len(overlapping_rules) > 5:
+                names += f", and {len(overlapping_rules) - 5} more"
+
+            answer = QMessageBox.question(
+                self,
+                "Search region overlaps Macro Tool",
+                "One or more enabled rules search inside the Macro Tool window. "
+                "This can make the tool click its own controls.\n\n"
+                f"Rules: {names}\n\n"
+                "Start anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if answer != QMessageBox.Yes:
+                self.append_log("Macro start canceled: rule region overlaps Macro Tool window.")
+                return False
+            return True
+
+        def _window_screen_region(self) -> tuple[int, int, int, int]:
+            geometry = self.frameGeometry()
+            return (
+                geometry.x(),
+                geometry.y(),
+                geometry.width(),
+                geometry.height(),
+            )
 
         def _stop_running(self) -> None:
             if not self.is_running:

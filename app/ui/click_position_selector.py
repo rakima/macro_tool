@@ -116,7 +116,9 @@ def create_click_position_selector(image_path: str | Path, initial_offset: Offse
         def __init__(self, parent_widget=None) -> None:
             super().__init__(parent_widget)
             self.setWindowTitle("Select Click Position")
-            self.resize(min(pixmap.width() + 40, 900), min(pixmap.height() + 90, 700))
+            viewport_width = min(pixmap.width(), 860)
+            viewport_height = min(pixmap.height(), 600)
+            self.resize(viewport_width + 46, viewport_height + 116)
 
             point_x, point_y = image_point_from_offset(pixmap.width(), pixmap.height(), initial_offset)
             point_x, point_y = clamp_image_point(pixmap.width(), pixmap.height(), point_x, point_y)
@@ -129,6 +131,8 @@ def create_click_position_selector(image_path: str | Path, initial_offset: Offse
             scroll_area = QScrollArea()
             scroll_area.setWidget(self.image_label)
             scroll_area.setWidgetResizable(False)
+            scroll_area.setFixedSize(viewport_width + 4, viewport_height + 4)
+            scroll_area.setAlignment(Qt.AlignLeft | Qt.AlignTop)
             layout.addWidget(scroll_area, 1)
 
             self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
