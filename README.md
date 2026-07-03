@@ -50,6 +50,18 @@ Rule editor:
 
 ![Rule editor](docs/assets/rule.png)
 
+Click position selector:
+
+![Click position selector](docs/assets/select_clicked_position.png)
+
+Mask editor:
+
+![Mask editor](docs/assets/editmask.png)
+
+Masked template image:
+
+![Masked template image](docs/assets/editmask_after.png)
+
 Runtime log:
 
 ![Runtime log](docs/assets/execution.png)
