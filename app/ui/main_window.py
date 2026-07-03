@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+from dataclasses import replace
 
 from app.models import RuleSet
 from app.rule_operations import (
@@ -165,6 +166,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_list = QListWidget()
             self.rule_list.setMinimumWidth(280)
             self.rule_list.currentRowChanged.connect(self._show_rule_summary)
+            self.rule_list.itemDoubleClicked.connect(self._toggle_rule_enabled)
             left_layout.addWidget(self.rule_list, 1)
 
             rule_buttons = QHBoxLayout()
@@ -330,6 +332,27 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             else:
                 self._show_rule_summary(-1)
             self.append_log(f"Deleted rule: {rule.name}")
+
+        def _toggle_rule_enabled(self, item) -> None:
+            if self.is_running:
+                return
+            row = self.rule_list.row(item)
+            if row < 0:
+                return
+
+            rule = self.rule_set.rules[row]
+            updated_rule = replace(rule, enabled=not rule.enabled)
+            try:
+                self.rule_set = replace_rule(self.rule_set, row, updated_rule)
+                self._save_rules()
+            except Exception as error:
+                QMessageBox.warning(self, "Could not update rule", str(error))
+                self.append_log(f"Rule update failed: {error}")
+                return
+
+            self._load_rules()
+            self.rule_list.setCurrentRow(row)
+            self.append_log(f"{'Enabled' if updated_rule.enabled else 'Disabled'} rule: {updated_rule.name}")
 
         def _save_rules(self) -> None:
             if self.rules_path is None:
