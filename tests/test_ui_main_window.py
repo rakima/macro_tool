@@ -1,5 +1,5 @@
 from app.models import RuleSet
-from app.ui.main_window import UiDependencyError, rectangles_overlap
+from app.ui.main_window import UiDependencyError, is_check_area_position, rectangles_overlap
 
 import pytest
 
@@ -36,3 +36,8 @@ def test_rectangles_overlap_returns_true_when_areas_intersect():
 
 def test_rectangles_overlap_returns_false_when_areas_do_not_intersect():
     assert rectangles_overlap((10, 10, 100, 100), (110, 10, 20, 20)) is False
+
+
+def test_is_check_area_position_detects_left_edge():
+    assert is_check_area_position(12) is True
+    assert is_check_area_position(40) is False

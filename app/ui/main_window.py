@@ -39,10 +39,14 @@ def rectangles_overlap(
     )
 
 
+def is_check_area_position(x: int, check_area_width: int = 28) -> bool:
+    """Return whether a list click x-position is inside the checkbox area."""
+    return x <= check_area_width
+
+
 def import_qt_widgets():
     try:
         from PySide6.QtWidgets import (  # type: ignore[import-not-found]
-            QCheckBox,
             QDialog,
             QFrame,
             QHBoxLayout,
@@ -63,7 +67,6 @@ def import_qt_widgets():
         raise UiDependencyError("PySide6 is not installed") from error
 
     return {
-        "QCheckBox": QCheckBox,
         "QDialog": QDialog,
         "QFrame": QFrame,
         "QHBoxLayout": QHBoxLayout,
@@ -91,7 +94,6 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     """
     qt = import_qt_widgets()
     Qt = qt["Qt"]
-    QCheckBox = qt["QCheckBox"]
     QDialog = qt["QDialog"]
     QFrame = qt["QFrame"]
     QHBoxLayout = qt["QHBoxLayout"]
@@ -108,6 +110,15 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     QVBoxLayout = qt["QVBoxLayout"]
     QWidget = qt["QWidget"]
 
+    class RuleListWidget(QListWidget):
+        def mouseDoubleClickEvent(self, event) -> None:
+            position = event.position().toPoint()
+            if self.itemAt(position) is not None and is_check_area_position(position.x()):
+                event.accept()
+                return
+
+            super().mouseDoubleClickEvent(event)
+
     class MainWindow(QMainWindow):
         def __init__(self, rules: RuleSet, path: str | Path | None = None) -> None:
             super().__init__()
@@ -117,6 +128,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.screenshot_provider = None
             self.is_running = False
             self.is_tick_running = False
+            self.is_loading_rules = False
             self.last_rule_log_states = {}
             self.setWindowTitle("Macro Tool")
             self.resize(980, 680)
@@ -163,10 +175,11 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             left_layout.setSpacing(8)
             left_layout.addWidget(QLabel("Rules"))
 
-            self.rule_list = QListWidget()
+            self.rule_list = RuleListWidget()
             self.rule_list.setMinimumWidth(280)
             self.rule_list.currentRowChanged.connect(self._show_rule_summary)
-            self.rule_list.itemDoubleClicked.connect(self._toggle_rule_enabled)
+            self.rule_list.itemChanged.connect(self._on_rule_item_changed)
+            self.rule_list.itemDoubleClicked.connect(self._open_rule_item_editor)
             left_layout.addWidget(self.rule_list, 1)
 
             rule_buttons = QHBoxLayout()
@@ -207,16 +220,14 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.setCentralWidget(root)
 
         def _load_rules(self) -> None:
+            self.is_loading_rules = True
             self.rule_list.clear()
             for rule in self.rule_set.rules:
-                item = QListWidgetItem()
-                checkbox = QCheckBox(rule.name)
-                checkbox.setChecked(rule.enabled)
-                checkbox.setFocusPolicy(Qt.NoFocus)
-                checkbox.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-                item.setSizeHint(checkbox.sizeHint())
+                item = QListWidgetItem(rule.name)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setCheckState(Qt.Checked if rule.enabled else Qt.Unchecked)
                 self.rule_list.addItem(item)
-                self.rule_list.setItemWidget(item, checkbox)
+            self.is_loading_rules = False
 
             if self.rule_set.rules:
                 self.rule_list.setCurrentRow(0)
@@ -268,6 +279,14 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             if self.is_running:
                 return
             row = self.rule_list.currentRow()
+            if row < 0:
+                return
+            self._open_rule_editor(self.rule_set.rules[row], row)
+
+        def _open_rule_item_editor(self, item) -> None:
+            if self.is_running:
+                return
+            row = self.rule_list.row(item)
             if row < 0:
                 return
             self._open_rule_editor(self.rule_set.rules[row], row)
@@ -333,15 +352,24 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 self._show_rule_summary(-1)
             self.append_log(f"Deleted rule: {rule.name}")
 
-        def _toggle_rule_enabled(self, item) -> None:
-            if self.is_running:
+        def _on_rule_item_changed(self, item) -> None:
+            if self.is_loading_rules:
                 return
             row = self.rule_list.row(item)
             if row < 0:
                 return
 
             rule = self.rule_set.rules[row]
-            updated_rule = replace(rule, enabled=not rule.enabled)
+            enabled = item.checkState() == Qt.Checked
+            if rule.enabled == enabled:
+                return
+            if self.is_running:
+                self.is_loading_rules = True
+                item.setCheckState(Qt.Checked if rule.enabled else Qt.Unchecked)
+                self.is_loading_rules = False
+                return
+
+            updated_rule = replace(rule, enabled=enabled)
             try:
                 self.rule_set = replace_rule(self.rule_set, row, updated_rule)
                 self._save_rules()
@@ -350,7 +378,6 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 self.append_log(f"Rule update failed: {error}")
                 return
 
-            self._load_rules()
             self.rule_list.setCurrentRow(row)
             self.append_log(f"{'Enabled' if updated_rule.enabled else 'Disabled'} rule: {updated_rule.name}")
 
