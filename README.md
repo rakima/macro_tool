@@ -21,9 +21,11 @@ Current implementation includes:
 - JSON rule loading and saving
 - Rule add, edit, and delete
 - Screen region selection
+- Click position selection on the template image
 - Multi-monitor region support
 - Relative image paths in `rules.json`
 - OpenCV template matching
+- Transparent PNG mask support for ignored template areas
 - Japanese filename support for template images
 - PyAutoGUI screenshot capture and mouse click execution
 - Cooldown-based repeated click prevention
@@ -127,11 +129,13 @@ GitHub Releases can be created from tags such as `v0.1.0-alpha.1`. The release w
 2. Set a rule name.
 3. Choose a detection image.
 4. Use `Select` to choose the search region.
-5. Adjust confidence and cooldown.
-6. Save the rule.
-7. Use `Test Detection` to verify matching without clicking.
-8. Click `Start` to run the macro loop.
-9. Click `Stop` to stop execution.
+5. Use `Edit Mask` when parts of the detection image should be ignored.
+6. Use click offset `Select` to choose the click position on the template image.
+7. Adjust confidence and cooldown.
+8. Save the rule.
+9. Use `Test Detection` to verify matching without clicking.
+10. Click `Start` to run the macro loop.
+11. Click `Stop` to stop execution.
 
 ## Rule Example
 
@@ -223,6 +227,8 @@ Not planned for v0.1:
 ## Notes
 
 - Template image paths are saved relative to `rules.json` when possible.
+- Transparent pixels in PNG template images are ignored during detection.
+- `Edit Mask` saves a separate `*.masked.png` file and updates the rule image path.
 - Negative region coordinates are allowed for multi-monitor setups.
 - The click action moves the mouse to the target, clicks, and then returns the cursor to its original position.
 - Some target applications may handle simulated mouse input differently from normal desktop applications.

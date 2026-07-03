@@ -34,6 +34,12 @@ class MatchResult:
         return self.y + self.height // 2
 
 
+@dataclass(frozen=True)
+class TemplateImage:
+    image: np.ndarray
+    mask: np.ndarray | None = None
+
+
 class TemplateDetector:
     """OpenCV template matching detector."""
 
@@ -55,10 +61,10 @@ class TemplateDetector:
         template = self._load_template(rule.image)
         region_image = self._crop_region(screenshot, rule, origin_x=origin_x, origin_y=origin_y)
 
-        if template.shape[0] > region_image.shape[0] or template.shape[1] > region_image.shape[1]:
+        if template.image.shape[0] > region_image.shape[0] or template.image.shape[1] > region_image.shape[1]:
             return None
 
-        result = cv2.matchTemplate(region_image, template, cv2.TM_CCOEFF_NORMED)
+        result = self._match_template(region_image, template)
         _, max_score, _, max_location = cv2.minMaxLoc(result)
 
         if max_score < rule.confidence:
@@ -71,11 +77,11 @@ class TemplateDetector:
             score=float(max_score),
             x=match_x,
             y=match_y,
-            width=int(template.shape[1]),
-            height=int(template.shape[0]),
+            width=int(template.image.shape[1]),
+            height=int(template.image.shape[0]),
         )
 
-    def _load_template(self, image_path: str) -> np.ndarray:
+    def _load_template(self, image_path: str) -> TemplateImage:
         path = Path(image_path)
         if not path.is_absolute():
             path = self.base_dir / path
@@ -85,10 +91,27 @@ class TemplateDetector:
         except OSError as error:
             raise DetectionError(f"Could not read template image: {path}") from error
 
-        template = cv2.imdecode(image_data, cv2.IMREAD_COLOR)
+        template = cv2.imdecode(image_data, cv2.IMREAD_UNCHANGED)
         if template is None:
             raise DetectionError(f"Could not read template image: {path}")
-        return template
+
+        if len(template.shape) == 2:
+            return TemplateImage(image=cv2.cvtColor(template, cv2.COLOR_GRAY2BGR))
+
+        if template.shape[2] == 4:
+            mask = template[:, :, 3]
+            if not np.any(mask):
+                raise DetectionError(f"Template image mask is empty: {path}")
+            return TemplateImage(image=template[:, :, :3], mask=mask)
+
+        return TemplateImage(image=template)
+
+    def _match_template(self, region_image: np.ndarray, template: TemplateImage) -> np.ndarray:
+        if template.mask is None:
+            return cv2.matchTemplate(region_image, template.image, cv2.TM_CCOEFF_NORMED)
+
+        result = cv2.matchTemplate(region_image, template.image, cv2.TM_CCORR_NORMED, mask=template.mask)
+        return np.nan_to_num(result, nan=-1.0, posinf=-1.0, neginf=-1.0)
 
     def _crop_region(
         self,

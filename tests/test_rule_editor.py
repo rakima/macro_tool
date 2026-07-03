@@ -1,8 +1,16 @@
+import cv2
+import numpy as np
 import pytest
 
 from app.models import Action, Offset, Region, Rule
 from app.ui.main_window import UiDependencyError
-from app.ui.rule_editor import RuleFormData, RuleFormValidationError
+from app.ui.rule_editor import RuleFormData, RuleFormValidationError, validate_detection_image
+
+
+def write_image(path, image: np.ndarray) -> None:
+    success, encoded_image = cv2.imencode(".png", image)
+    assert success
+    encoded_image.tofile(str(path))
 
 
 def make_rule() -> Rule:
@@ -79,6 +87,34 @@ def test_rule_form_data_to_rule_validates_before_model_creation():
 
     with pytest.raises(RuleFormValidationError, match="Detection image"):
         data.to_rule()
+
+
+def test_validate_detection_image_accepts_existing_image(tmp_path):
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    write_image(tmp_path / "button.png", image)
+
+    validate_detection_image("button.png", base_dir=tmp_path)
+
+
+def test_validate_detection_image_rejects_missing_image(tmp_path):
+    with pytest.raises(RuleFormValidationError, match="does not exist"):
+        validate_detection_image("missing.png", base_dir=tmp_path)
+
+
+def test_validate_detection_image_rejects_invalid_image(tmp_path):
+    path = tmp_path / "broken.png"
+    path.write_text("not an image", encoding="utf-8")
+
+    with pytest.raises(RuleFormValidationError, match="decoded"):
+        validate_detection_image("broken.png", base_dir=tmp_path)
+
+
+def test_validate_detection_image_rejects_fully_transparent_png(tmp_path):
+    image = np.zeros((10, 10, 4), dtype=np.uint8)
+    write_image(tmp_path / "transparent.png", image)
+
+    with pytest.raises(RuleFormValidationError, match="fully transparent"):
+        validate_detection_image("transparent.png", base_dir=tmp_path)
 
 
 def test_create_rule_editor_raises_clear_error_without_pyside6(monkeypatch):

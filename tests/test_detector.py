@@ -32,6 +32,15 @@ def make_marker(color: tuple[int, int, int]) -> np.ndarray:
     return marker
 
 
+def make_masked_marker() -> np.ndarray:
+    marker = np.zeros((10, 10, 4), dtype=np.uint8)
+    marker[:, :, :3] = (0, 0, 255)
+    marker[:, :, 3] = 255
+    marker[3:7, 3:7, :3] = (255, 255, 255)
+    marker[3:7, 3:7, 3] = 0
+    return marker
+
+
 def test_detect_returns_match_when_template_is_found(tmp_path):
     screenshot = np.zeros((80, 80, 3), dtype=np.uint8)
     template = make_marker((0, 0, 255))
@@ -63,6 +72,32 @@ def test_detect_reads_template_with_japanese_filename(tmp_path):
     assert result is not None
     assert result.x == 30
     assert result.y == 25
+
+
+def test_detect_ignores_transparent_template_pixels(tmp_path):
+    screenshot = np.zeros((80, 80, 3), dtype=np.uint8)
+    template = make_masked_marker()
+    target = template[:, :, :3].copy()
+    target[3:7, 3:7] = (0, 255, 0)
+    screenshot[25:35, 30:40] = target
+    write_image(tmp_path / "masked.png", template)
+
+    detector = TemplateDetector(base_dir=tmp_path)
+    result = detector.detect(screenshot, make_rule("masked.png", confidence=0.99))
+
+    assert result is not None
+    assert result.x == 30
+    assert result.y == 25
+
+
+def test_detect_rejects_fully_transparent_template(tmp_path):
+    screenshot = np.zeros((80, 80, 3), dtype=np.uint8)
+    template = np.zeros((10, 10, 4), dtype=np.uint8)
+    write_image(tmp_path / "transparent.png", template)
+
+    detector = TemplateDetector(base_dir=tmp_path)
+    with pytest.raises(DetectionError, match="mask is empty"):
+        detector.detect(screenshot, make_rule("transparent.png"))
 
 
 def test_detect_handles_captured_screenshot_with_virtual_origin(tmp_path):

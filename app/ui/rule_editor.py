@@ -5,12 +5,41 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 from app.models import Action, Offset, Region, Rule
 from app.ui.main_window import UiDependencyError
 
 
 class RuleFormValidationError(ValueError):
     """Raised when rule editor form data is invalid."""
+
+
+def resolve_image_path(image: str, base_dir: str | Path | None = None) -> Path:
+    image_path = Path(image)
+    if base_dir is not None and not image_path.is_absolute():
+        return Path(base_dir) / image_path
+    return image_path
+
+
+def validate_detection_image(image: str, base_dir: str | Path | None = None) -> None:
+    image_path = resolve_image_path(image, base_dir)
+    if not image_path.exists():
+        raise RuleFormValidationError(f"Detection image does not exist: {image_path}")
+    if not image_path.is_file():
+        raise RuleFormValidationError(f"Detection image is not a file: {image_path}")
+
+    try:
+        image_data = np.fromfile(str(image_path), dtype=np.uint8)
+    except OSError as error:
+        raise RuleFormValidationError(f"Could not read detection image: {image_path}") from error
+
+    decoded_image = cv2.imdecode(image_data, cv2.IMREAD_UNCHANGED)
+    if decoded_image is None:
+        raise RuleFormValidationError(f"Detection image could not be decoded: {image_path}")
+    if len(decoded_image.shape) == 3 and decoded_image.shape[2] == 4 and not np.any(decoded_image[:, :, 3]):
+        raise RuleFormValidationError(f"Detection image mask is fully transparent: {image_path}")
 
 
 @dataclass(frozen=True)
@@ -164,9 +193,12 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             image_layout.setContentsMargins(0, 0, 0, 0)
             self.image_input = QLineEdit()
             self.image_button = QPushButton("Browse")
+            self.mask_button = QPushButton("Edit Mask")
             self.image_button.clicked.connect(self._browse_image)
+            self.mask_button.clicked.connect(self._edit_mask)
             image_layout.addWidget(self.image_input, 1)
             image_layout.addWidget(self.image_button)
+            image_layout.addWidget(self.mask_button)
             form.addRow("Detection image", image_row)
 
             region_row = QWidget()
@@ -207,9 +239,12 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             offset_layout.setContentsMargins(0, 0, 0, 0)
             self.offset_x_input = self._make_int_input(-99999, 99999)
             self.offset_y_input = self._make_int_input(-99999, 99999)
+            self.offset_button = QPushButton("Select")
+            self.offset_button.clicked.connect(self._select_click_position)
             offset_layout.addWidget(self.offset_x_input)
             offset_layout.addWidget(self.offset_y_input)
-            form.addRow("Offset x/y", offset_row)
+            offset_layout.addWidget(self.offset_button)
+            form.addRow("Click offset x/y", offset_row)
 
             self.cooldown_input = QDoubleSpinBox()
             self.cooldown_input.setRange(0.0, 9999.0)
@@ -248,6 +283,31 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             except ValueError:
                 return path
 
+        def _resolve_image_path(self, image_text: str) -> Path:
+            return resolve_image_path(image_text, base_dir)
+
+        def _edit_mask(self) -> None:
+            from app.ui.mask_editor import create_mask_editor, default_masked_image_path
+
+            image_text = self.image_input.text().strip()
+            if not image_text:
+                QMessageBox.warning(self, "Image required", "Select a detection image first.")
+                return
+
+            image_path = self._resolve_image_path(image_text)
+            output_path = default_masked_image_path(image_path)
+
+            try:
+                dialog = create_mask_editor(image_path, output_path=output_path, parent=self)
+            except ValueError as error:
+                QMessageBox.warning(self, "Could not open image", str(error))
+                return
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            self.image_input.setText(self._display_image_path(str(dialog.masked_image_path())))
+
         def _select_region(self) -> None:
             from app.ui.region_selector import create_region_selector
 
@@ -262,6 +322,33 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             self.region_y_input.setValue(region.y)
             self.region_width_input.setValue(region.width)
             self.region_height_input.setValue(region.height)
+
+        def _select_click_position(self) -> None:
+            from app.ui.click_position_selector import create_click_position_selector
+
+            image_text = self.image_input.text().strip()
+            if not image_text:
+                QMessageBox.warning(self, "Image required", "Select a detection image first.")
+                return
+
+            image_path = self._resolve_image_path(image_text)
+
+            try:
+                dialog = create_click_position_selector(
+                    image_path,
+                    Offset(x=self.offset_x_input.value(), y=self.offset_y_input.value()),
+                    parent=self,
+                )
+            except ValueError as error:
+                QMessageBox.warning(self, "Could not open image", str(error))
+                return
+
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            offset = dialog.selected_offset()
+            self.offset_x_input.setValue(offset.x)
+            self.offset_y_input.setValue(offset.y)
 
         def form_data(self) -> RuleFormData:
             return RuleFormData(
@@ -301,10 +388,30 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
         def accept(self) -> None:
             try:
                 self.rule()
+                validate_detection_image(self.image_input.text(), base_dir)
             except RuleFormValidationError as error:
                 QMessageBox.warning(self, "Invalid rule", str(error))
                 return
 
+            if self._looks_like_default_region():
+                answer = QMessageBox.question(
+                    self,
+                    "Confirm region",
+                    "The search region is still 1x1 at x=0, y=0. Save this rule anyway?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if answer != QMessageBox.Yes:
+                    return
+
             super().accept()
+
+        def _looks_like_default_region(self) -> bool:
+            return (
+                self.region_x_input.value() == 0
+                and self.region_y_input.value() == 0
+                and self.region_width_input.value() == 1
+                and self.region_height_input.value() == 1
+            )
 
     return RuleEditorDialog(rule, parent)
