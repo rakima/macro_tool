@@ -48,6 +48,29 @@ v0.1.0-alpha.2
 
 6. Confirm the GitHub Actions release workflow completed successfully.
 
+## v0.1.0 Stable Candidate Checklist
+
+Use this checklist before removing the alpha label from v0.1.0.
+
+- Fresh application launch succeeds.
+- Rule creation works.
+- Detection image selection works.
+- Search region selection works.
+- Click position selection works.
+- Mask editing creates a `*.masked.png` file.
+- Rule saving writes `rules.json`.
+- Saved rules load correctly after restarting the packaged app.
+- Test Detection works without clicking.
+- Start and Stop work.
+- Cooldown prevents repeated triggering.
+- Japanese filename template images load correctly.
+- Multi-monitor regions, including negative coordinates, work.
+- Missing or invalid images show a useful validation error.
+- Fully transparent PNG templates are rejected.
+- Rules overlapping the Macro Tool window show a confirmation before Start.
+- README screenshots and demo assets match the current UI.
+- GitHub Actions creates `MacroTool-windows.zip`.
+
 ## Release Asset
 
 The release workflow creates a Windows zip archive:

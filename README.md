@@ -247,6 +247,15 @@ Not planned for v0.1:
 - Do not run rule files from untrusted sources.
 - When an enabled rule's search region overlaps the Macro Tool window, the app asks for confirmation before starting.
 
+## Known Limitations
+
+- Packaged builds are currently Windows-focused.
+- The executable is unsigned, so Windows Defender or SmartScreen may show a warning.
+- Some applications may ignore simulated mouse input or handle it differently from normal clicks.
+- Rule files can trigger mouse actions, so only use rule files from trusted sources.
+- Keyboard actions, OCR, scheduling, multiple actions per rule, and conditional branching are not supported in v0.1.
+- Rule data is stored in `rules.json` next to the executable when using the packaged build.
+
 ## License
 
 This project is licensed under the MIT License.
