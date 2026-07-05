@@ -1,5 +1,7 @@
 # Macro Tool
 
+[日本語版 README](README.ja.md)
+
 Macro Tool is a desktop image-recognition macro tool built with Python.
 
 Instead of replaying fixed coordinates and delays, it watches a selected screen region and runs an action when a configured image appears.
