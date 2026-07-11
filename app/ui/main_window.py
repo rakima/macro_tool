@@ -424,8 +424,14 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 elif item.matched and item.match is not None:
                     self.append_log(
                         f"[{item.rule_name}] matched score={item.match.score:.3f} "
+                        f"({item.match.score * 100:.1f}%) "
                         f"at x={item.match.x}, y={item.match.y} "
                         f"center=({item.match.center_x}, {item.match.center_y})"
+                    )
+                elif item.score is not None:
+                    self.append_log(
+                        f"[{item.rule_name}] not matched best_score={item.score:.3f} "
+                        f"({item.score * 100:.1f}%)"
                     )
                 else:
                     self.append_log(f"[{item.rule_name}] not matched")

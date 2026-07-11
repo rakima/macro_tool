@@ -48,6 +48,14 @@ class TemplateDetector:
 
     def detect(self, screenshot: np.ndarray, rule: Rule) -> MatchResult | None:
         """Return the best match when it meets the rule confidence."""
+        match = self.find_best_match(screenshot, rule)
+        if match is None or match.score < rule.confidence:
+            return None
+
+        return match
+
+    def find_best_match(self, screenshot: np.ndarray, rule: Rule) -> MatchResult | None:
+        """Return the best match even when it is below the rule confidence."""
         origin_x = 0
         origin_y = 0
         if isinstance(screenshot, CapturedScreenshot):
@@ -66,9 +74,6 @@ class TemplateDetector:
 
         result = self._match_template(region_image, template)
         _, max_score, _, max_location = cv2.minMaxLoc(result)
-
-        if max_score < rule.confidence:
-            return None
 
         match_x = rule.region.x + max_location[0]
         match_y = rule.region.y + max_location[1]
