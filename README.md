@@ -24,6 +24,7 @@ Current implementation includes:
 - Rule set creation and switching from `rules/*.json`
 - Rule add, edit, and delete
 - Rule duplication and reordering
+- Last status and score display in the rule list
 - Detection image preview
 - Detection image capture from screenshots
 - Screen region selection

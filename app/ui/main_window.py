@@ -108,6 +108,25 @@ def format_rule_test_result(result: RuleRunResult | None, confidence: float) -> 
     return ["Last Test: not matched"]
 
 
+def format_rule_list_text(name: str, result: RuleRunResult | None = None) -> str:
+    """Format a rule list item with the latest status when available."""
+    if result is None:
+        return name
+
+    if result.error:
+        return f"{name}  [error]"
+    if result.triggered and result.score is not None:
+        return f"{name}  [clicked {format_score_percent(result.score)}]"
+    if result.skipped_cooldown:
+        return f"{name}  [cooldown]"
+    if result.matched and result.score is not None:
+        return f"{name}  [matched {format_score_percent(result.score)}]"
+    if result.score is not None:
+        return f"{name}  [below {format_score_percent(result.score)}]"
+
+    return f"{name}  [not matched]"
+
+
 def import_qt_widgets():
     try:
         from PySide6.QtWidgets import (  # type: ignore[import-not-found]
@@ -220,6 +239,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.is_loading_rules = False
             self.last_rule_log_states = {}
             self.last_test_results = {}
+            self.last_rule_results = {}
             self.is_loading_rule_profiles = False
             self.rule_profiles = []
             self.setWindowTitle("Macro Tool")
@@ -352,7 +372,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.is_loading_rules = True
             self.rule_list.clear()
             for index, rule in enumerate(self.rule_set.rules):
-                item = QListWidgetItem(rule.name)
+                item = QListWidgetItem(format_rule_list_text(rule.name, self.last_rule_results.get(rule.name)))
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
                 item.setData(Qt.UserRole, index)
                 item.setCheckState(Qt.Checked if rule.enabled else Qt.Unchecked)
@@ -422,6 +442,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rules_path = profile_path
             self.last_rule_log_states = {}
             self.last_test_results = {}
+            self.last_rule_results = {}
             self._load_rules()
             self.append_log(f"Loaded rule set: {profile_path} ({len(self.rule_set.rules)} rule(s).)")
 
@@ -450,6 +471,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_set = RuleSet(rules=[])
             self.last_rule_log_states = {}
             self.last_test_results = {}
+            self.last_rule_results = {}
             self._load_rule_profiles()
             self._select_rule_profile_path(profile_path)
             self._load_rules()
@@ -582,6 +604,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 return
 
             self.last_test_results = {}
+            self.last_rule_results = {}
             self._load_rules()
             self._load_rule_profiles()
             self.rule_list.setCurrentRow(selected_row)
@@ -634,6 +657,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 return
 
             self.last_test_results = {}
+            self.last_rule_results = {}
             self._load_rules()
             if self.rule_set.rules:
                 self.rule_list.setCurrentRow(min(row, len(self.rule_set.rules) - 1))
@@ -759,6 +783,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
 
             for item in result.results:
                 self.last_test_results[item.rule_name] = item
+                self.last_rule_results[item.rule_name] = item
                 if item.error:
                     self.append_log(f"[{item.rule_name}] error: {item.error}")
                 elif item.matched and item.match is not None:
@@ -780,6 +805,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 "Test detection completed: "
                 f"matched={matched_count}, not_matched={not_matched_count}, errors={error_count}"
             )
+            self._refresh_rule_list_texts()
             self._show_rule_summary(self.rule_list.currentRow())
 
         def _start_running(self) -> None:
@@ -800,6 +826,8 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             )
             self.screenshot_provider = PyAutoGuiScreenshotProvider()
             self.last_rule_log_states = {}
+            self.last_rule_results = {}
+            self._refresh_rule_list_texts()
             self._set_running_state(True)
             self.append_log(
                 f"Macro started. enabled_rules={len(enabled_rules)}, interval={self.run_timer.interval()}ms. "
@@ -902,6 +930,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
 
         def _append_run_result(self, result: RunnerCycleResult) -> None:
             for item in result.results:
+                self.last_rule_results[item.rule_name] = item
                 state = self._run_result_state(item)
                 if item.error:
                     self._append_state_change_log(item.rule_name, state, f"[{item.rule_name}] error: {item.error}")
@@ -916,6 +945,15 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                     self._append_state_change_log(item.rule_name, state, f"[{item.rule_name}] cooldown")
                 else:
                     self._append_state_change_log(item.rule_name, state, f"[{item.rule_name}] not matched")
+            self._refresh_rule_list_texts()
+
+        def _refresh_rule_list_texts(self) -> None:
+            self.is_loading_rules = True
+            for row, rule in enumerate(self.rule_set.rules):
+                item = self.rule_list.item(row)
+                if item is not None:
+                    item.setText(format_rule_list_text(rule.name, self.last_rule_results.get(rule.name)))
+            self.is_loading_rules = False
 
         def _run_result_state(self, item) -> str:
             if item.error:

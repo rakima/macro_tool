@@ -5,6 +5,7 @@ from app.detector import MatchResult
 from app.runner import RuleRunResult
 from app.ui.main_window import (
     UiDependencyError,
+    format_rule_list_text,
     format_rule_test_result,
     format_score_percent,
     is_check_area_position,
@@ -135,3 +136,37 @@ def test_format_rule_test_result_returns_error_summary():
         "Last Test: error",
         "Error: template missing",
     ]
+
+
+def test_format_rule_list_text_returns_name_without_result():
+    assert format_rule_list_text("Rule") == "Rule"
+
+
+def test_format_rule_list_text_returns_clicked_score():
+    result = RuleRunResult(rule_name="Rule", triggered=True, score=0.95)
+
+    assert format_rule_list_text("Rule", result) == "Rule  [clicked 95.0%]"
+
+
+def test_format_rule_list_text_returns_matched_score():
+    result = RuleRunResult(rule_name="Rule", matched=True, score=0.91)
+
+    assert format_rule_list_text("Rule", result) == "Rule  [matched 91.0%]"
+
+
+def test_format_rule_list_text_returns_below_score():
+    result = RuleRunResult(rule_name="Rule", score=0.842)
+
+    assert format_rule_list_text("Rule", result) == "Rule  [below 84.2%]"
+
+
+def test_format_rule_list_text_returns_cooldown():
+    result = RuleRunResult(rule_name="Rule", skipped_cooldown=True)
+
+    assert format_rule_list_text("Rule", result) == "Rule  [cooldown]"
+
+
+def test_format_rule_list_text_returns_error():
+    result = RuleRunResult(rule_name="Rule", error="failed")
+
+    assert format_rule_list_text("Rule", result) == "Rule  [error]"
