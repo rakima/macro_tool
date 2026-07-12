@@ -6,6 +6,7 @@ from app.ui.main_window import (
     format_rule_test_result,
     format_score_percent,
     is_check_area_position,
+    is_escape_key,
     rectangles_overlap,
     resolve_rule_image_path,
 )
@@ -52,6 +53,11 @@ def test_rectangles_overlap_returns_false_when_areas_do_not_intersect():
 def test_is_check_area_position_detects_left_edge():
     assert is_check_area_position(12) is True
     assert is_check_area_position(40) is False
+
+
+def test_is_escape_key_matches_escape_only():
+    assert is_escape_key(27, 27) is True
+    assert is_escape_key(65, 27) is False
 
 
 def test_resolve_rule_image_path_uses_base_dir_for_relative_path(tmp_path):

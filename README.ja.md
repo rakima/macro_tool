@@ -148,7 +148,7 @@ GitHub Releasesでは、Windows向けzipを配布しています。
 8. ルールを保存する。
 9. `Test Detection`でクリックなしの検知確認を行う。
 10. `Start`で実行する。
-11. `Stop`で停止する。
+11. `Stop`または`Esc`で停止する。
 
 ## ルール例
 

@@ -47,6 +47,11 @@ def is_check_area_position(x: int, check_area_width: int = 28) -> bool:
     return x <= check_area_width
 
 
+def is_escape_key(key: int, escape_key: int) -> bool:
+    """Return whether the pressed key is Escape."""
+    return key == escape_key
+
+
 def resolve_rule_image_path(image: str, base_dir: str | Path | None = None) -> Path:
     """Resolve a rule image path against the rules file directory."""
     image_path = Path(image)
@@ -668,7 +673,8 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.last_rule_log_states = {}
             self._set_running_state(True)
             self.append_log(
-                f"Macro started. enabled_rules={len(enabled_rules)}, interval={self.run_timer.interval()}ms"
+                f"Macro started. enabled_rules={len(enabled_rules)}, interval={self.run_timer.interval()}ms. "
+                "Press Esc to stop."
             )
             self.run_timer.start()
 
@@ -797,6 +803,14 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
 
             self.last_rule_log_states[rule_name] = state
             self.append_log(message)
+
+        def keyPressEvent(self, event) -> None:
+            if self.is_running and is_escape_key(event.key(), Qt.Key_Escape):
+                event.accept()
+                self._stop_running()
+                return
+
+            super().keyPressEvent(event)
 
         def closeEvent(self, event) -> None:
             if self.is_running:

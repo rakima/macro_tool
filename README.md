@@ -152,7 +152,7 @@ GitHub Releases can be created from tags such as `v0.1.0-alpha.1`. The release w
 8. Save the rule.
 9. Use `Test Detection` to verify matching without clicking.
 10. Click `Start` to run the macro loop.
-11. Click `Stop` to stop execution.
+11. Click `Stop` or press `Esc` to stop execution.
 
 ## Rule Example
 
