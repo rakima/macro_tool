@@ -39,6 +39,7 @@ def test_import_qt_widgets_returns_required_widget_names_when_pyside6_is_availab
 
     assert "QComboBox" in qt
     assert "QDialog" in qt
+    assert "QInputDialog" in qt
     assert "QMainWindow" in qt
     assert "QListWidget" in qt
     assert "QPlainTextEdit" in qt

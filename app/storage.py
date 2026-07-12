@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,28 @@ def _title_rule_profiles(paths: list[Path]) -> list[RuleProfile]:
         profiles.append(RuleProfile(title=title, path=path))
 
     return profiles
+
+
+def safe_rule_profile_stem(name: str) -> str:
+    """Return a filesystem-friendly rule profile filename stem."""
+    stem = re.sub(r"[^0-9A-Za-z_-]+", "_", name.strip()).strip("_")
+    return stem or "rules"
+
+
+def new_rule_profile_path(base_dir: str | Path, name: str) -> Path:
+    """Return a non-existing path for a new rule profile under rules/."""
+    profiles_dir = Path(base_dir) / "rules"
+    stem = safe_rule_profile_stem(name)
+    path = profiles_dir / f"{stem}.json"
+    if not path.exists():
+        return path
+
+    suffix = 1
+    while True:
+        candidate = profiles_dir / f"{stem}_{suffix}.json"
+        if not candidate.exists():
+            return candidate
+        suffix += 1
 
 
 def load_rules(path: str | Path) -> RuleSet:

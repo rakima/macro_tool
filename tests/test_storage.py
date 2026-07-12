@@ -3,7 +3,14 @@ import json
 import pytest
 
 from app.models import Action, Region, Rule, RuleSet
-from app.storage import RuleStorageError, list_rule_profiles, load_rules, save_rules
+from app.storage import (
+    RuleStorageError,
+    list_rule_profiles,
+    load_rules,
+    new_rule_profile_path,
+    safe_rule_profile_stem,
+    save_rules,
+)
 
 
 def make_rule_set() -> RuleSet:
@@ -122,3 +129,23 @@ def test_list_rule_profiles_disambiguates_duplicate_rules_title(tmp_path):
 
 def test_list_rule_profiles_returns_empty_list_without_rules_directory(tmp_path):
     assert list_rule_profiles(tmp_path) == []
+
+
+def test_safe_rule_profile_stem_removes_unsafe_characters():
+    assert safe_rule_profile_stem("Tower Profile!?") == "Tower_Profile"
+
+
+def test_safe_rule_profile_stem_uses_fallback_for_blank_name():
+    assert safe_rule_profile_stem("   ") == "rules"
+
+
+def test_new_rule_profile_path_returns_rules_directory_path(tmp_path):
+    assert new_rule_profile_path(tmp_path, "Tower Profile") == tmp_path / "rules" / "Tower_Profile.json"
+
+
+def test_new_rule_profile_path_avoids_existing_file(tmp_path):
+    rules_dir = tmp_path / "rules"
+    rules_dir.mkdir()
+    (rules_dir / "tower.json").write_text("{}", encoding="utf-8")
+
+    assert new_rule_profile_path(tmp_path, "tower") == rules_dir / "tower_1.json"

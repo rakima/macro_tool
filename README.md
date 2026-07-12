@@ -21,7 +21,7 @@ Current implementation includes:
 
 - PySide6 desktop GUI
 - JSON rule loading and saving
-- Rule set switching from `rules/*.json`
+- Rule set creation and switching from `rules/*.json`
 - Rule add, edit, and delete
 - Rule duplication and reordering
 - Detection image preview
@@ -155,7 +155,7 @@ GitHub Releases can be created from tags such as `v0.1.0-alpha.1`. The release w
 10. Click `Start` to run the macro loop.
 11. Click `Stop` or press `Esc` to stop execution.
 
-Place `xxx.json` files in the `rules` directory to switch rule sets from the `Rule Set` dropdown in the main window.
+Use the `Rule Set` dropdown in the main window to switch rule sets. Click `New` to create an empty rule set under the `rules` directory.
 
 ## Rule Example
 

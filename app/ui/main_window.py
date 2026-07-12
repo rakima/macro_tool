@@ -115,6 +115,7 @@ def import_qt_widgets():
             QDialog,
             QFrame,
             QHBoxLayout,
+            QInputDialog,
             QLabel,
             QListWidget,
             QListWidgetItem,
@@ -137,6 +138,7 @@ def import_qt_widgets():
         "QDialog": QDialog,
         "QFrame": QFrame,
         "QHBoxLayout": QHBoxLayout,
+        "QInputDialog": QInputDialog,
         "QImage": QImage,
         "QLabel": QLabel,
         "QListWidget": QListWidget,
@@ -168,6 +170,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     QFrame = qt["QFrame"]
     QHBoxLayout = qt["QHBoxLayout"]
     QImage = qt["QImage"]
+    QInputDialog = qt["QInputDialog"]
     QLabel = qt["QLabel"]
     QListWidget = qt["QListWidget"]
     QListWidgetItem = qt["QListWidgetItem"]
@@ -247,6 +250,9 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_profile_input.setMinimumWidth(180)
             self.rule_profile_input.currentIndexChanged.connect(self._on_rule_profile_changed)
             toolbar.addWidget(self.rule_profile_input)
+            self.new_rule_profile_button = QPushButton("New")
+            self.new_rule_profile_button.clicked.connect(self._create_rule_profile)
+            toolbar.addWidget(self.new_rule_profile_button)
             toolbar.addStretch(1)
 
             self.test_button = QPushButton("Test Detection")
@@ -384,6 +390,13 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_profile_input.setEnabled(not self.is_running)
             self.is_loading_rule_profiles = False
 
+        def _select_rule_profile_path(self, profile_path: Path) -> None:
+            for index in range(self.rule_profile_input.count()):
+                item_path = self.rule_profile_input.itemData(index)
+                if item_path and Path(item_path).resolve() == profile_path.resolve():
+                    self.rule_profile_input.setCurrentIndex(index)
+                    return
+
         def _on_rule_profile_changed(self, index: int) -> None:
             if self.is_loading_rule_profiles or self.is_running or index < 0:
                 return
@@ -411,6 +424,36 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.last_test_results = {}
             self._load_rules()
             self.append_log(f"Loaded rule set: {profile_path} ({len(self.rule_set.rules)} rule(s).)")
+
+        def _create_rule_profile(self) -> None:
+            if self.is_running:
+                return
+
+            name, accepted = QInputDialog.getText(self, "New rule set", "Rule set name:")
+            if not accepted:
+                return
+            if not name.strip():
+                QMessageBox.warning(self, "Invalid rule set name", "Rule set name is required.")
+                return
+
+            from app.storage import new_rule_profile_path
+
+            profile_path = new_rule_profile_path(rule_profile_base_dir(self.rules_path), name)
+            try:
+                save_rules(profile_path, RuleSet(rules=[]))
+            except RuleStorageError as error:
+                QMessageBox.warning(self, "Could not create rule set", str(error))
+                self.append_log(f"Rule set create failed: {error}")
+                return
+
+            self.rules_path = profile_path
+            self.rule_set = RuleSet(rules=[])
+            self.last_rule_log_states = {}
+            self.last_test_results = {}
+            self._load_rule_profiles()
+            self._select_rule_profile_path(profile_path)
+            self._load_rules()
+            self.append_log(f"Created rule set: {profile_path}")
 
         def _show_rule_summary(self, row: int) -> None:
             self._update_rule_buttons(row)
@@ -827,6 +870,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.stop_button.setEnabled(running)
             self.test_button.setEnabled(not running)
             self.rule_profile_input.setEnabled(bool(self.rule_profiles) and not running)
+            self.new_rule_profile_button.setEnabled(not running)
             self.add_button.setEnabled(not running)
             self.rule_list.setDragDropMode(QListWidget.NoDragDrop if running else QListWidget.InternalMove)
             self._update_rule_buttons(self.rule_list.currentRow())
