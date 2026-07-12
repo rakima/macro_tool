@@ -14,7 +14,7 @@ from app.rule_operations import (
     remove_rule,
     replace_rule,
 )
-from app.runner import MacroRunner, RunnerCycleResult
+from app.runner import MacroRunner, RuleRunResult, RunnerCycleResult
 from app.storage import RuleStorageError, save_rules
 from app.system import is_windows_admin
 
@@ -42,6 +42,37 @@ def rectangles_overlap(
 def is_check_area_position(x: int, check_area_width: int = 28) -> bool:
     """Return whether a list click x-position is inside the checkbox area."""
     return x <= check_area_width
+
+
+def format_score_percent(score: float) -> str:
+    """Format an OpenCV match score as a percentage."""
+    return f"{score * 100:.1f}%"
+
+
+def format_rule_test_result(result: RuleRunResult | None, confidence: float) -> list[str]:
+    """Format the latest test detection result for the rule summary panel."""
+    if result is None:
+        return ["Last Test: not run"]
+
+    confidence_text = format_score_percent(confidence)
+    if result.error:
+        return [
+            "Last Test: error",
+            f"Error: {result.error}",
+        ]
+
+    if result.matched and result.match is not None:
+        score_text = format_score_percent(result.match.score)
+        return [
+            f"Last Test: matched ({score_text} >= {confidence_text})",
+            f"Match: x={result.match.x}, y={result.match.y}, center=({result.match.center_x}, {result.match.center_y})",
+        ]
+
+    if result.score is not None:
+        score_text = format_score_percent(result.score)
+        return [f"Last Test: below threshold ({score_text} < {confidence_text})"]
+
+    return ["Last Test: not matched"]
 
 
 def import_qt_widgets():
@@ -130,6 +161,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.is_tick_running = False
             self.is_loading_rules = False
             self.last_rule_log_states = {}
+            self.last_test_results = {}
             self.setWindowTitle("Macro Tool")
             self.resize(980, 680)
             self._build_ui()
@@ -242,6 +274,10 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             rule = self.rule_set.rules[row]
             region = rule.region
             offset = rule.action.offset
+            test_result_lines = format_rule_test_result(
+                self.last_test_results.get(rule.name),
+                rule.confidence,
+            )
             self.summary_label.setText(
                 "\n".join(
                     [
@@ -253,6 +289,8 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                         f"Action: {rule.action.type} / {rule.action.button}",
                         f"Offset: x={offset.x}, y={offset.y}",
                         f"Cooldown: {rule.cooldown}s",
+                        "",
+                        *test_result_lines,
                     ]
                 )
             )
@@ -315,6 +353,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 self.append_log(f"Rule save failed: {error}")
                 return
 
+            self.last_test_results = {}
             self._load_rules()
             self.rule_list.setCurrentRow(selected_row)
             self.append_log(f"Saved rule: {edited_rule.name}")
@@ -345,6 +384,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 self.append_log(f"Rule delete failed: {error}")
                 return
 
+            self.last_test_results = {}
             self._load_rules()
             if self.rule_set.rules:
                 self.rule_list.setCurrentRow(min(row, len(self.rule_set.rules) - 1))
@@ -419,6 +459,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             not_matched_count = len(result.results) - matched_count - error_count
 
             for item in result.results:
+                self.last_test_results[item.rule_name] = item
                 if item.error:
                     self.append_log(f"[{item.rule_name}] error: {item.error}")
                 elif item.matched and item.match is not None:
@@ -440,6 +481,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 "Test detection completed: "
                 f"matched={matched_count}, not_matched={not_matched_count}, errors={error_count}"
             )
+            self._show_rule_summary(self.rule_list.currentRow())
 
         def _start_running(self) -> None:
             enabled_rules = [rule for rule in self.rule_set.rules if rule.enabled]
