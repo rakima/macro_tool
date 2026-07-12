@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from app.models import RuleSet
 from app.detector import MatchResult
 from app.runner import RuleRunResult
@@ -7,7 +9,9 @@ from app.ui.main_window import (
     format_score_percent,
     is_check_area_position,
     is_escape_key,
+    is_valid_rule_row,
     rectangles_overlap,
+    rule_profile_base_dir,
     resolve_rule_image_path,
 )
 
@@ -33,6 +37,7 @@ def test_import_qt_widgets_returns_required_widget_names_when_pyside6_is_availab
 
     qt = import_qt_widgets()
 
+    assert "QComboBox" in qt
     assert "QDialog" in qt
     assert "QMainWindow" in qt
     assert "QListWidget" in qt
@@ -60,6 +65,13 @@ def test_is_escape_key_matches_escape_only():
     assert is_escape_key(65, 27) is False
 
 
+def test_is_valid_rule_row_rejects_out_of_range_rows():
+    assert is_valid_rule_row(0, 1) is True
+    assert is_valid_rule_row(-1, 1) is False
+    assert is_valid_rule_row(1, 1) is False
+    assert is_valid_rule_row(0, 0) is False
+
+
 def test_resolve_rule_image_path_uses_base_dir_for_relative_path(tmp_path):
     assert resolve_rule_image_path("image/button.png", tmp_path) == tmp_path / "image" / "button.png"
 
@@ -68,6 +80,14 @@ def test_resolve_rule_image_path_leaves_absolute_path(tmp_path):
     image_path = tmp_path / "button.png"
 
     assert resolve_rule_image_path(str(image_path), tmp_path) == image_path
+
+
+def test_rule_profile_base_dir_uses_rules_parent_for_profile_path():
+    assert rule_profile_base_dir("rules/tower.json") == Path(".")
+
+
+def test_rule_profile_base_dir_uses_rules_file_parent_for_legacy_path():
+    assert rule_profile_base_dir("rules.json") == Path(".")
 
 
 def test_format_score_percent():

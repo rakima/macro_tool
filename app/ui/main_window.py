@@ -52,12 +52,29 @@ def is_escape_key(key: int, escape_key: int) -> bool:
     return key == escape_key
 
 
+def is_valid_rule_row(row: int, rule_count: int) -> bool:
+    """Return whether a row points to an existing rule."""
+    return 0 <= row < rule_count
+
+
 def resolve_rule_image_path(image: str, base_dir: str | Path | None = None) -> Path:
     """Resolve a rule image path against the rules file directory."""
     image_path = Path(image)
     if base_dir is not None and not image_path.is_absolute():
         return Path(base_dir) / image_path
     return image_path
+
+
+def rule_profile_base_dir(rules_path: str | Path | None) -> Path:
+    """Return the project directory used to find rules/*.json profiles."""
+    if rules_path is None:
+        return Path(".")
+
+    path = Path(rules_path)
+    parent = path.parent
+    if parent.name == "rules":
+        return parent.parent
+    return parent
 
 
 def format_score_percent(score: float) -> str:
@@ -94,6 +111,7 @@ def format_rule_test_result(result: RuleRunResult | None, confidence: float) -> 
 def import_qt_widgets():
     try:
         from PySide6.QtWidgets import (  # type: ignore[import-not-found]
+            QComboBox,
             QDialog,
             QFrame,
             QHBoxLayout,
@@ -115,6 +133,7 @@ def import_qt_widgets():
         raise UiDependencyError("PySide6 is not installed") from error
 
     return {
+        "QComboBox": QComboBox,
         "QDialog": QDialog,
         "QFrame": QFrame,
         "QHBoxLayout": QHBoxLayout,
@@ -144,6 +163,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     """
     qt = import_qt_widgets()
     Qt = qt["Qt"]
+    QComboBox = qt["QComboBox"]
     QDialog = qt["QDialog"]
     QFrame = qt["QFrame"]
     QHBoxLayout = qt["QHBoxLayout"]
@@ -197,12 +217,15 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.is_loading_rules = False
             self.last_rule_log_states = {}
             self.last_test_results = {}
+            self.is_loading_rule_profiles = False
+            self.rule_profiles = []
             self.setWindowTitle("Macro Tool")
             self.resize(980, 680)
             self._build_ui()
             self.run_timer = QTimer(self)
             self.run_timer.setInterval(500)
             self.run_timer.timeout.connect(self._run_loop_tick)
+            self._load_rule_profiles()
             self._load_rules()
             self.append_log(f"Loaded {len(self.rule_set.rules)} rule(s).")
             self._append_environment_hints()
@@ -218,6 +241,12 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.status_label = QLabel("Stopped")
             self.status_label.setObjectName("statusLabel")
             toolbar.addWidget(self.status_label)
+            toolbar.addSpacing(16)
+            toolbar.addWidget(QLabel("Rule Set"))
+            self.rule_profile_input = QComboBox()
+            self.rule_profile_input.setMinimumWidth(180)
+            self.rule_profile_input.currentIndexChanged.connect(self._on_rule_profile_changed)
+            toolbar.addWidget(self.rule_profile_input)
             toolbar.addStretch(1)
 
             self.test_button = QPushButton("Test Detection")
@@ -327,9 +356,65 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             if self.rule_set.rules:
                 self.rule_list.setCurrentRow(0)
 
+        def _load_rule_profiles(self) -> None:
+            from app.storage import list_rule_profiles
+
+            self.rule_profiles = list_rule_profiles(rule_profile_base_dir(self.rules_path))
+            self.is_loading_rule_profiles = True
+            self.rule_profile_input.clear()
+
+            if not self.rule_profiles:
+                self.rule_profile_input.addItem("No rule sets")
+                self.rule_profile_input.setEnabled(False)
+                self.is_loading_rule_profiles = False
+                return
+
+            for profile in self.rule_profiles:
+                self.rule_profile_input.addItem(profile.title, str(profile.path))
+
+            selected_index = -1
+            if self.rules_path is not None:
+                current_path = self.rules_path.resolve()
+                for index, profile in enumerate(self.rule_profiles):
+                    if profile.path.resolve() == current_path:
+                        selected_index = index
+                        break
+
+            self.rule_profile_input.setCurrentIndex(selected_index)
+            self.rule_profile_input.setEnabled(not self.is_running)
+            self.is_loading_rule_profiles = False
+
+        def _on_rule_profile_changed(self, index: int) -> None:
+            if self.is_loading_rule_profiles or self.is_running or index < 0:
+                return
+
+            path_text = self.rule_profile_input.itemData(index)
+            if not path_text:
+                return
+
+            profile_path = Path(path_text)
+            if self.rules_path is not None and profile_path.resolve() == self.rules_path.resolve():
+                return
+
+            from app.storage import load_rules
+
+            try:
+                self.rule_set = load_rules(profile_path)
+            except RuleStorageError as error:
+                QMessageBox.warning(self, "Could not load rule set", str(error))
+                self.append_log(f"Rule set load failed: {error}")
+                self._load_rule_profiles()
+                return
+
+            self.rules_path = profile_path
+            self.last_rule_log_states = {}
+            self.last_test_results = {}
+            self._load_rules()
+            self.append_log(f"Loaded rule set: {profile_path} ({len(self.rule_set.rules)} rule(s).)")
+
         def _show_rule_summary(self, row: int) -> None:
             self._update_rule_buttons(row)
-            if row < 0:
+            if not is_valid_rule_row(row, len(self.rule_set.rules)):
                 self._clear_rule_preview("No image preview.")
                 self.summary_label.setText("No rule selected.")
                 return
@@ -455,6 +540,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
 
             self.last_test_results = {}
             self._load_rules()
+            self._load_rule_profiles()
             self.rule_list.setCurrentRow(selected_row)
             self.append_log(f"Saved rule: {edited_rule.name}")
 
@@ -740,12 +826,13 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.start_button.setEnabled(not running)
             self.stop_button.setEnabled(running)
             self.test_button.setEnabled(not running)
+            self.rule_profile_input.setEnabled(bool(self.rule_profiles) and not running)
             self.add_button.setEnabled(not running)
             self.rule_list.setDragDropMode(QListWidget.NoDragDrop if running else QListWidget.InternalMove)
             self._update_rule_buttons(self.rule_list.currentRow())
 
         def _update_rule_buttons(self, row: int) -> None:
-            selected = row >= 0
+            selected = is_valid_rule_row(row, len(self.rule_set.rules))
             can_edit = selected and not self.is_running
             self.edit_button.setEnabled(can_edit)
             self.duplicate_button.setEnabled(can_edit)
