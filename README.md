@@ -24,6 +24,7 @@ Current implementation includes:
 - Rule add, edit, and delete
 - Rule duplication and reordering
 - Detection image preview
+- Detection image capture from screenshots
 - Screen region selection
 - Click position selection on the template image
 - Multi-monitor region support

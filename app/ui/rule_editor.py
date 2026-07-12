@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 import cv2
 import numpy as np
@@ -14,6 +15,32 @@ from app.ui.main_window import UiDependencyError
 
 class RuleFormValidationError(ValueError):
     """Raised when rule editor form data is invalid."""
+
+
+def safe_template_file_stem(name: str) -> str:
+    """Return a filesystem-friendly template filename stem."""
+    stem = re.sub(r"[^0-9A-Za-z_-]+", "_", name.strip()).strip("_")
+    return stem or "template"
+
+
+def default_captured_template_path(base_dir: str | Path | None, rule_name: str) -> Path:
+    """Return the default output path for a captured template image."""
+    root = Path(base_dir) if base_dir is not None else Path(".")
+    return root / "image" / f"{safe_template_file_stem(rule_name)}.png"
+
+
+def save_captured_template(path: str | Path, image: np.ndarray) -> None:
+    """Save a captured BGR template image as PNG."""
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    success, encoded_image = cv2.imencode(".png", image)
+    if not success:
+        raise RuleFormValidationError(f"Could not encode captured image: {output_path}")
+
+    try:
+        encoded_image.tofile(str(output_path))
+    except OSError as error:
+        raise RuleFormValidationError(f"Could not save captured image: {output_path}") from error
 
 
 def resolve_image_path(image: str, base_dir: str | Path | None = None) -> Path:
@@ -193,11 +220,14 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             image_layout.setContentsMargins(0, 0, 0, 0)
             self.image_input = QLineEdit()
             self.image_button = QPushButton("Browse")
+            self.capture_button = QPushButton("Capture")
             self.mask_button = QPushButton("Edit Mask")
             self.image_button.clicked.connect(self._browse_image)
+            self.capture_button.clicked.connect(self._capture_image)
             self.mask_button.clicked.connect(self._edit_mask)
             image_layout.addWidget(self.image_input, 1)
             image_layout.addWidget(self.image_button)
+            image_layout.addWidget(self.capture_button)
             image_layout.addWidget(self.mask_button)
             form.addRow("Detection image", image_row)
 
@@ -272,6 +302,37 @@ def create_rule_editor(rule: Rule | None = None, parent=None, base_dir: str | Pa
             )
             if path:
                 self.image_input.setText(self._display_image_path(path))
+
+        def _capture_image(self) -> None:
+            from app.ui.region_selector import create_region_selector
+
+            dialog = create_region_selector(parent=self)
+            if dialog is None:
+                return
+            if dialog.exec() != QDialog.Accepted:
+                return
+
+            default_path = default_captured_template_path(base_dir, self.name_input.text())
+            path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Save captured template",
+                str(default_path),
+                "PNG image (*.png);;All files (*.*)",
+            )
+            if not path:
+                return
+
+            output_path = Path(path)
+            if output_path.suffix.lower() != ".png":
+                output_path = output_path.with_suffix(".png")
+
+            try:
+                save_captured_template(output_path, dialog.selected_image())
+            except RuleFormValidationError as error:
+                QMessageBox.warning(self, "Could not save captured image", str(error))
+                return
+
+            self.image_input.setText(self._display_image_path(str(output_path)))
 
         def _display_image_path(self, path: str) -> str:
             image_path = Path(path)

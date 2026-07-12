@@ -4,7 +4,14 @@ import pytest
 
 from app.models import Action, Offset, Region, Rule
 from app.ui.main_window import UiDependencyError
-from app.ui.rule_editor import RuleFormData, RuleFormValidationError, validate_detection_image
+from app.ui.rule_editor import (
+    RuleFormData,
+    RuleFormValidationError,
+    default_captured_template_path,
+    safe_template_file_stem,
+    save_captured_template,
+    validate_detection_image,
+)
 
 
 def write_image(path, image: np.ndarray) -> None:
@@ -115,6 +122,30 @@ def test_validate_detection_image_rejects_fully_transparent_png(tmp_path):
 
     with pytest.raises(RuleFormValidationError, match="fully transparent"):
         validate_detection_image("transparent.png", base_dir=tmp_path)
+
+
+def test_safe_template_file_stem_removes_unsafe_characters():
+    assert safe_template_file_stem("Start Button!?") == "Start_Button"
+
+
+def test_safe_template_file_stem_uses_fallback_for_blank_name():
+    assert safe_template_file_stem("   ") == "template"
+
+
+def test_default_captured_template_path_uses_image_directory(tmp_path):
+    assert default_captured_template_path(tmp_path, "Start Button") == tmp_path / "image" / "Start_Button.png"
+
+
+def test_save_captured_template_writes_png(tmp_path):
+    image = np.zeros((4, 5, 3), dtype=np.uint8)
+    image[:, :] = (0, 0, 255)
+    output_path = tmp_path / "画像" / "button.png"
+
+    save_captured_template(output_path, image)
+
+    decoded = cv2.imdecode(np.fromfile(str(output_path), dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+    assert decoded is not None
+    assert decoded.shape == (4, 5, 3)
 
 
 def test_create_rule_editor_raises_clear_error_without_pyside6(monkeypatch):

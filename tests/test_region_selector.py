@@ -3,7 +3,7 @@ import pytest
 
 from app.models import Region
 from app.ui.main_window import UiDependencyError
-from app.ui.region_selector import Point, RegionSelectionError, region_from_points
+from app.ui.region_selector import Point, RegionSelectionError, crop_image_by_region, region_from_points
 
 
 def test_region_from_points_handles_down_right_drag():
@@ -36,6 +36,25 @@ def test_region_from_points_handles_up_left_drag():
 def test_region_from_points_rejects_empty_region():
     with pytest.raises(RegionSelectionError, match="width and height"):
         region_from_points(Point(10, 20), Point(10, 20))
+
+
+def test_crop_image_by_region_uses_virtual_origin():
+    image = np.arange(5 * 6 * 3, dtype=np.uint8).reshape((5, 6, 3))
+
+    cropped = crop_image_by_region(
+        image,
+        Region(x=-8, y=21, width=3, height=2),
+        origin=Point(-10, 20),
+    )
+
+    np.testing.assert_array_equal(cropped, image[1:3, 2:5])
+
+
+def test_crop_image_by_region_rejects_outside_region():
+    image = np.zeros((5, 6, 3), dtype=np.uint8)
+
+    with pytest.raises(RegionSelectionError, match="outside"):
+        crop_image_by_region(image, Region(x=5, y=0, width=2, height=2))
 
 
 def test_create_region_selector_raises_clear_error_without_pyside6(monkeypatch):
