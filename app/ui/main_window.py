@@ -47,6 +47,14 @@ def is_check_area_position(x: int, check_area_width: int = 28) -> bool:
     return x <= check_area_width
 
 
+def resolve_rule_image_path(image: str, base_dir: str | Path | None = None) -> Path:
+    """Resolve a rule image path against the rules file directory."""
+    image_path = Path(image)
+    if base_dir is not None and not image_path.is_absolute():
+        return Path(base_dir) / image_path
+    return image_path
+
+
 def format_score_percent(score: float) -> str:
     """Format an OpenCV match score as a percentage."""
     return f"{score * 100:.1f}%"
@@ -97,6 +105,7 @@ def import_qt_widgets():
             QWidget,
         )
         from PySide6.QtCore import QTimer, Qt  # type: ignore[import-not-found]
+        from PySide6.QtGui import QImage, QPixmap  # type: ignore[import-not-found]
     except ImportError as error:
         raise UiDependencyError("PySide6 is not installed") from error
 
@@ -104,6 +113,7 @@ def import_qt_widgets():
         "QDialog": QDialog,
         "QFrame": QFrame,
         "QHBoxLayout": QHBoxLayout,
+        "QImage": QImage,
         "QLabel": QLabel,
         "QListWidget": QListWidget,
         "QListWidgetItem": QListWidgetItem,
@@ -111,6 +121,7 @@ def import_qt_widgets():
         "QMessageBox": QMessageBox,
         "QPushButton": QPushButton,
         "QPlainTextEdit": QPlainTextEdit,
+        "QPixmap": QPixmap,
         "QSizePolicy": QSizePolicy,
         "QSplitter": QSplitter,
         "QTimer": QTimer,
@@ -131,6 +142,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     QDialog = qt["QDialog"]
     QFrame = qt["QFrame"]
     QHBoxLayout = qt["QHBoxLayout"]
+    QImage = qt["QImage"]
     QLabel = qt["QLabel"]
     QListWidget = qt["QListWidget"]
     QListWidgetItem = qt["QListWidgetItem"]
@@ -138,6 +150,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     QMessageBox = qt["QMessageBox"]
     QPushButton = qt["QPushButton"]
     QPlainTextEdit = qt["QPlainTextEdit"]
+    QPixmap = qt["QPixmap"]
     QSizePolicy = qt["QSizePolicy"]
     QSplitter = qt["QSplitter"]
     QTimer = qt["QTimer"]
@@ -271,6 +284,14 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             right_layout.setSpacing(8)
             right_layout.addWidget(QLabel("Selected Rule"))
 
+            self.preview_label = QLabel("No image preview.")
+            self.preview_label.setAlignment(Qt.AlignCenter)
+            self.preview_label.setMinimumSize(220, 150)
+            self.preview_label.setMaximumHeight(190)
+            self.preview_label.setFrameShape(QFrame.StyledPanel)
+            self.preview_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            right_layout.addWidget(self.preview_label, 0)
+
             self.summary_label = QLabel("No rule selected.")
             self.summary_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
             self.summary_label.setWordWrap(True)
@@ -304,10 +325,12 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
         def _show_rule_summary(self, row: int) -> None:
             self._update_rule_buttons(row)
             if row < 0:
+                self._clear_rule_preview("No image preview.")
                 self.summary_label.setText("No rule selected.")
                 return
 
             rule = self.rule_set.rules[row]
+            self._show_rule_preview(rule.image)
             region = rule.region
             offset = rule.action.offset
             test_result_lines = format_rule_test_result(
@@ -330,6 +353,42 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                     ]
                 )
             )
+
+        def _show_rule_preview(self, image: str) -> None:
+            base_dir = self.rules_path.parent if self.rules_path is not None else Path(".")
+            image_path = resolve_rule_image_path(image, base_dir)
+            if not image_path.exists() or not image_path.is_file():
+                self._clear_rule_preview("Image not found.")
+                return
+
+            try:
+                image_data = image_path.read_bytes()
+            except OSError:
+                self._clear_rule_preview("Could not read image.")
+                return
+
+            qimage = QImage.fromData(image_data)
+            if qimage.isNull():
+                self._clear_rule_preview("Could not preview image.")
+                return
+
+            pixmap = QPixmap.fromImage(qimage)
+            max_width = max(1, self.preview_label.width() - 12)
+            max_height = max(1, self.preview_label.height() - 12)
+            self.preview_label.setPixmap(
+                pixmap.scaled(
+                    max_width,
+                    max_height,
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation,
+                )
+            )
+            self.preview_label.setToolTip(str(image_path))
+
+        def _clear_rule_preview(self, message: str) -> None:
+            self.preview_label.clear()
+            self.preview_label.setText(message)
+            self.preview_label.setToolTip("")
 
         def append_log(self, message: str) -> None:
             timestamp = datetime.now().strftime("%H:%M:%S")

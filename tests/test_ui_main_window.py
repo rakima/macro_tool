@@ -7,6 +7,7 @@ from app.ui.main_window import (
     format_score_percent,
     is_check_area_position,
     rectangles_overlap,
+    resolve_rule_image_path,
 )
 
 import pytest
@@ -35,6 +36,8 @@ def test_import_qt_widgets_returns_required_widget_names_when_pyside6_is_availab
     assert "QMainWindow" in qt
     assert "QListWidget" in qt
     assert "QPlainTextEdit" in qt
+    assert "QImage" in qt
+    assert "QPixmap" in qt
     assert "QTimer" in qt
 
 
@@ -49,6 +52,16 @@ def test_rectangles_overlap_returns_false_when_areas_do_not_intersect():
 def test_is_check_area_position_detects_left_edge():
     assert is_check_area_position(12) is True
     assert is_check_area_position(40) is False
+
+
+def test_resolve_rule_image_path_uses_base_dir_for_relative_path(tmp_path):
+    assert resolve_rule_image_path("image/button.png", tmp_path) == tmp_path / "image" / "button.png"
+
+
+def test_resolve_rule_image_path_leaves_absolute_path(tmp_path):
+    image_path = tmp_path / "button.png"
+
+    assert resolve_rule_image_path(str(image_path), tmp_path) == image_path
 
 
 def test_format_score_percent():

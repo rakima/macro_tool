@@ -23,6 +23,7 @@ Current implementation includes:
 - JSON rule loading and saving
 - Rule add, edit, and delete
 - Rule duplication and reordering
+- Detection image preview
 - Screen region selection
 - Click position selection on the template image
 - Multi-monitor region support
