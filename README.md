@@ -22,6 +22,7 @@ Current implementation includes:
 - PySide6 desktop GUI
 - JSON rule loading and saving
 - Rule add, edit, and delete
+- Rule duplication and reordering
 - Screen region selection
 - Click position selection on the template image
 - Multi-monitor region support

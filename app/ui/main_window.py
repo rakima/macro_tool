@@ -9,8 +9,11 @@ from dataclasses import replace
 from app.models import RuleSet
 from app.rule_operations import (
     add_rule,
+    duplicate_rule,
     make_image_path_relative,
     make_rule_set_image_paths_relative,
+    move_rule,
+    reorder_rules,
     remove_rule,
     replace_rule,
 )
@@ -142,6 +145,10 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
     QWidget = qt["QWidget"]
 
     class RuleListWidget(QListWidget):
+        def __init__(self) -> None:
+            super().__init__()
+            self.on_reordered = None
+
         def mouseDoubleClickEvent(self, event) -> None:
             position = event.position().toPoint()
             if self.itemAt(position) is not None and is_check_area_position(position.x()):
@@ -149,6 +156,16 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 return
 
             super().mouseDoubleClickEvent(event)
+
+        def dropEvent(self, event) -> None:
+            before_order = self.rule_order()
+            super().dropEvent(event)
+            after_order = self.rule_order()
+            if after_order != before_order and callable(self.on_reordered):
+                self.on_reordered(after_order)
+
+        def rule_order(self) -> list[int]:
+            return [self.item(row).data(Qt.UserRole) for row in range(self.count())]
 
     class MainWindow(QMainWindow):
         def __init__(self, rules: RuleSet, path: str | Path | None = None) -> None:
@@ -212,21 +229,40 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_list.currentRowChanged.connect(self._show_rule_summary)
             self.rule_list.itemChanged.connect(self._on_rule_item_changed)
             self.rule_list.itemDoubleClicked.connect(self._open_rule_item_editor)
+            self.rule_list.on_reordered = self._on_rule_list_reordered
+            self.rule_list.setDragDropMode(QListWidget.InternalMove)
+            self.rule_list.setDefaultDropAction(Qt.MoveAction)
+            self.rule_list.setDropIndicatorShown(True)
             left_layout.addWidget(self.rule_list, 1)
 
             rule_buttons = QHBoxLayout()
             self.add_button = QPushButton("Add")
             self.edit_button = QPushButton("Edit")
+            self.duplicate_button = QPushButton("Duplicate")
             self.delete_button = QPushButton("Delete")
             self.edit_button.setEnabled(False)
+            self.duplicate_button.setEnabled(False)
             self.delete_button.setEnabled(False)
             self.add_button.clicked.connect(self._open_new_rule_editor)
             self.edit_button.clicked.connect(self._open_selected_rule_editor)
+            self.duplicate_button.clicked.connect(self._duplicate_selected_rule)
             self.delete_button.clicked.connect(self._delete_selected_rule)
             rule_buttons.addWidget(self.add_button)
             rule_buttons.addWidget(self.edit_button)
+            rule_buttons.addWidget(self.duplicate_button)
             rule_buttons.addWidget(self.delete_button)
             left_layout.addLayout(rule_buttons)
+
+            move_buttons = QHBoxLayout()
+            self.move_up_button = QPushButton("Up")
+            self.move_down_button = QPushButton("Down")
+            self.move_up_button.setEnabled(False)
+            self.move_down_button.setEnabled(False)
+            self.move_up_button.clicked.connect(self._move_selected_rule_up)
+            self.move_down_button.clicked.connect(self._move_selected_rule_down)
+            move_buttons.addWidget(self.move_up_button)
+            move_buttons.addWidget(self.move_down_button)
+            left_layout.addLayout(move_buttons)
             splitter.addWidget(left_panel)
 
             right_panel = QWidget()
@@ -254,9 +290,10 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
         def _load_rules(self) -> None:
             self.is_loading_rules = True
             self.rule_list.clear()
-            for rule in self.rule_set.rules:
+            for index, rule in enumerate(self.rule_set.rules):
                 item = QListWidgetItem(rule.name)
-                item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+                item.setFlags(item.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled)
+                item.setData(Qt.UserRole, index)
                 item.setCheckState(Qt.Checked if rule.enabled else Qt.Unchecked)
                 self.rule_list.addItem(item)
             self.is_loading_rules = False
@@ -265,8 +302,7 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
                 self.rule_list.setCurrentRow(0)
 
         def _show_rule_summary(self, row: int) -> None:
-            self.edit_button.setEnabled(row >= 0 and not self.is_running)
-            self.delete_button.setEnabled(row >= 0 and not self.is_running)
+            self._update_rule_buttons(row)
             if row < 0:
                 self.summary_label.setText("No rule selected.")
                 return
@@ -358,6 +394,26 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.rule_list.setCurrentRow(selected_row)
             self.append_log(f"Saved rule: {edited_rule.name}")
 
+        def _duplicate_selected_rule(self) -> None:
+            if self.is_running:
+                return
+            row = self.rule_list.currentRow()
+            if row < 0:
+                return
+
+            try:
+                self.rule_set = duplicate_rule(self.rule_set, row)
+                self._save_rules()
+            except Exception as error:
+                QMessageBox.warning(self, "Could not duplicate rule", str(error))
+                self.append_log(f"Rule duplicate failed: {error}")
+                return
+
+            duplicated_rule = self.rule_set.rules[row + 1]
+            self._load_rules()
+            self.rule_list.setCurrentRow(row + 1)
+            self.append_log(f"Duplicated rule: {duplicated_rule.name}")
+
         def _delete_selected_rule(self) -> None:
             if self.is_running:
                 return
@@ -391,6 +447,56 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             else:
                 self._show_rule_summary(-1)
             self.append_log(f"Deleted rule: {rule.name}")
+
+        def _move_selected_rule_up(self) -> None:
+            self._move_selected_rule(-1)
+
+        def _move_selected_rule_down(self) -> None:
+            self._move_selected_rule(1)
+
+        def _move_selected_rule(self, direction: int) -> None:
+            if self.is_running:
+                return
+            row = self.rule_list.currentRow()
+            target_row = row + direction
+            if row < 0 or target_row < 0 or target_row >= len(self.rule_set.rules):
+                return
+
+            rule_name = self.rule_set.rules[row].name
+            try:
+                self.rule_set = move_rule(self.rule_set, row, target_row)
+                self._save_rules()
+            except Exception as error:
+                QMessageBox.warning(self, "Could not move rule", str(error))
+                self.append_log(f"Rule move failed: {error}")
+                return
+
+            self._load_rules()
+            self.rule_list.setCurrentRow(target_row)
+            self.append_log(f"Moved rule: {rule_name}")
+
+        def _on_rule_list_reordered(self, order: list[int]) -> None:
+            if self.is_loading_rules:
+                return
+            if self.is_running:
+                self._load_rules()
+                return
+
+            current_item = self.rule_list.currentItem()
+            selected_original_index = current_item.data(Qt.UserRole) if current_item is not None else None
+            try:
+                self.rule_set = reorder_rules(self.rule_set, order)
+                self._save_rules()
+            except Exception as error:
+                QMessageBox.warning(self, "Could not reorder rules", str(error))
+                self.append_log(f"Rule reorder failed: {error}")
+                self._load_rules()
+                return
+
+            selected_row = order.index(selected_original_index) if selected_original_index in order else 0
+            self._load_rules()
+            self.rule_list.setCurrentRow(selected_row)
+            self.append_log("Reordered rules.")
 
         def _on_rule_item_changed(self, item) -> None:
             if self.is_loading_rules:
@@ -570,9 +676,17 @@ def create_main_window(rule_set: RuleSet, rules_path: str | Path | None = None):
             self.stop_button.setEnabled(running)
             self.test_button.setEnabled(not running)
             self.add_button.setEnabled(not running)
-            selected = self.rule_list.currentRow() >= 0
-            self.edit_button.setEnabled(selected and not running)
-            self.delete_button.setEnabled(selected and not running)
+            self.rule_list.setDragDropMode(QListWidget.NoDragDrop if running else QListWidget.InternalMove)
+            self._update_rule_buttons(self.rule_list.currentRow())
+
+        def _update_rule_buttons(self, row: int) -> None:
+            selected = row >= 0
+            can_edit = selected and not self.is_running
+            self.edit_button.setEnabled(can_edit)
+            self.duplicate_button.setEnabled(can_edit)
+            self.delete_button.setEnabled(can_edit)
+            self.move_up_button.setEnabled(can_edit and row > 0)
+            self.move_down_button.setEnabled(can_edit and row < len(self.rule_set.rules) - 1)
 
         def _run_loop_tick(self) -> None:
             if (
