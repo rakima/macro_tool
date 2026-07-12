@@ -36,6 +36,21 @@ def region_from_points(start: Point, end: Point, origin: Point | None = None) ->
     return Region(x=x + origin.x, y=y + origin.y, width=width, height=height)
 
 
+def crop_image_by_region(image: np.ndarray, region: Region, origin: Point | None = None) -> np.ndarray:
+    """Crop an image using a screen-coordinate region and screenshot origin."""
+    origin = origin or Point(0, 0)
+    left = region.x - origin.x
+    top = region.y - origin.y
+    right = left + region.width
+    bottom = top + region.height
+
+    image_height, image_width = image.shape[:2]
+    if left < 0 or top < 0 or right > image_width or bottom > image_height:
+        raise RegionSelectionError("Selected region is outside the screenshot.")
+
+    return image[top:bottom, left:right].copy()
+
+
 def import_qt_modules():
     try:
         from PySide6.QtCore import QPoint, QRect, Qt  # type: ignore[import-not-found]
@@ -154,6 +169,8 @@ def create_region_selector(screenshot: np.ndarray | CapturedScreenshot | None = 
             super().__init__(parent_widget)
             self.setWindowTitle("Select Region")
             self.resize(960, 640)
+            self.image = image
+            self.origin = origin
             self._build_ui(image, origin)
 
         def _build_ui(self, image: np.ndarray, origin: Point) -> None:
@@ -180,6 +197,9 @@ def create_region_selector(screenshot: np.ndarray | CapturedScreenshot | None = 
 
         def selected_region(self) -> Region:
             return self.screenshot_label.selected_region()
+
+        def selected_image(self) -> np.ndarray:
+            return crop_image_by_region(self.image, self.selected_region(), self.origin)
 
         def accept(self) -> None:
             try:

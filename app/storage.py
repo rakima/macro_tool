@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +13,67 @@ from app.models import RuleSet, RuleValidationError
 
 class RuleStorageError(RuntimeError):
     """Raised when a rule file cannot be loaded or saved."""
+
+
+@dataclass(frozen=True)
+class RuleProfile:
+    title: str
+    path: Path
+
+
+def list_rule_profiles(base_dir: str | Path = ".") -> list[RuleProfile]:
+    """List the root rules.json and rule JSON files from the rules directory."""
+    root_dir = Path(base_dir)
+    profile_paths = []
+
+    legacy_rules_path = root_dir / "rules.json"
+    if legacy_rules_path.is_file():
+        profile_paths.append(legacy_rules_path)
+
+    profiles_dir = root_dir / "rules"
+    if profiles_dir.exists() and profiles_dir.is_dir():
+        profile_paths.extend(
+            path
+            for path in sorted(profiles_dir.glob("*.json"), key=lambda item: item.stem.lower())
+            if path.is_file()
+        )
+
+    return _title_rule_profiles(profile_paths)
+
+
+def _title_rule_profiles(paths: list[Path]) -> list[RuleProfile]:
+    title_counts: dict[str, int] = {}
+    profiles = []
+    for path in paths:
+        base_title = path.stem
+        count = title_counts.get(base_title, 0)
+        title_counts[base_title] = count + 1
+        title = base_title if count == 0 else f"{base_title} ({count})"
+        profiles.append(RuleProfile(title=title, path=path))
+
+    return profiles
+
+
+def safe_rule_profile_stem(name: str) -> str:
+    """Return a filesystem-friendly rule profile filename stem."""
+    stem = re.sub(r"[^0-9A-Za-z_-]+", "_", name.strip()).strip("_")
+    return stem or "rules"
+
+
+def new_rule_profile_path(base_dir: str | Path, name: str) -> Path:
+    """Return a non-existing path for a new rule profile under rules/."""
+    profiles_dir = Path(base_dir) / "rules"
+    stem = safe_rule_profile_stem(name)
+    path = profiles_dir / f"{stem}.json"
+    if not path.exists():
+        return path
+
+    suffix = 1
+    while True:
+        candidate = profiles_dir / f"{stem}_{suffix}.json"
+        if not candidate.exists():
+            return candidate
+        suffix += 1
 
 
 def load_rules(path: str | Path) -> RuleSet:

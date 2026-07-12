@@ -145,6 +145,19 @@ def test_detect_returns_none_when_score_is_below_confidence(tmp_path):
     assert result is None
 
 
+def test_find_best_match_returns_score_below_confidence(tmp_path):
+    screenshot = np.zeros((80, 80, 3), dtype=np.uint8)
+    screenshot[25:35, 30:40] = make_marker((0, 255, 0))
+    template = make_marker((0, 0, 255))
+    write_image(tmp_path / "marker.png", template)
+
+    detector = TemplateDetector(base_dir=tmp_path)
+    result = detector.find_best_match(screenshot, make_rule("marker.png", confidence=0.99))
+
+    assert result is not None
+    assert result.score < 0.99
+
+
 def test_detect_returns_none_when_template_is_larger_than_region(tmp_path):
     screenshot = np.zeros((80, 80, 3), dtype=np.uint8)
     template = np.zeros((50, 50, 3), dtype=np.uint8)

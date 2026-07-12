@@ -23,6 +23,19 @@ class FakeDetector:
         return self.matches.get(rule.name)
 
 
+class FakeBestMatchDetector:
+    def __init__(self, matches: dict[str, MatchResult | None]) -> None:
+        self.matches = matches
+        self.calls = []
+
+    def find_best_match(self, screenshot, rule: Rule) -> MatchResult | None:
+        self.calls.append(rule.name)
+        return self.matches.get(rule.name)
+
+    def detect(self, screenshot, rule: Rule) -> MatchResult | None:
+        raise AssertionError("test_once should use find_best_match when available")
+
+
 class FailingDetector:
     def detect(self, screenshot, rule: Rule) -> MatchResult | None:
         raise DetectionError("detection failed")
@@ -230,6 +243,33 @@ def test_test_once_detects_without_clicking_or_cooldown():
     assert result.results[0].click_target is None
     assert mouse.clicks == []
     assert runner.last_triggered_at == {}
+
+
+def test_test_once_records_below_confidence_score_without_clicking():
+    rule = make_rule()
+    match = MatchResult(
+        rule_name="Rule",
+        score=0.84,
+        x=10,
+        y=20,
+        width=10,
+        height=10,
+    )
+    mouse = FakeMouse()
+    detector = FakeBestMatchDetector({"Rule": match})
+    runner = MacroRunner(
+        rules=[rule],
+        detector=detector,
+        mouse=mouse,
+    )
+
+    result = runner.test_once(screenshot=object())
+
+    assert result.results[0].matched is False
+    assert result.results[0].score == 0.84
+    assert result.results[0].match is None
+    assert mouse.clicks == []
+    assert detector.calls == ["Rule"]
 
 
 def test_test_once_skips_disabled_rules():

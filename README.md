@@ -21,7 +21,12 @@ Current implementation includes:
 
 - PySide6 desktop GUI
 - JSON rule loading and saving
+- Rule set creation and switching from `rules/*.json`
 - Rule add, edit, and delete
+- Rule duplication and reordering
+- Last status and score display in the rule list
+- Detection image preview
+- Detection image capture from screenshots
 - Screen region selection
 - Click position selection on the template image
 - Multi-monitor region support
@@ -149,7 +154,9 @@ GitHub Releases can be created from tags such as `v0.1.0-alpha.1`. The release w
 8. Save the rule.
 9. Use `Test Detection` to verify matching without clicking.
 10. Click `Start` to run the macro loop.
-11. Click `Stop` to stop execution.
+11. Click `Stop` or press `Esc` to stop execution.
+
+Use the `Rule Set` dropdown in the main window to switch rule sets. Click `New` to create an empty rule set under the `rules` directory.
 
 ## Rule Example
 

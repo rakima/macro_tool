@@ -4,8 +4,11 @@ from app.models import Action, Region, Rule, RuleSet
 from app.rule_operations import (
     RuleOperationError,
     add_rule,
+    duplicate_rule,
     make_image_path_relative,
     make_rule_set_image_paths_relative,
+    move_rule,
+    reorder_rules,
     remove_rule,
     replace_rule,
 )
@@ -58,6 +61,73 @@ def test_remove_rule_returns_new_rule_set():
 def test_remove_rule_rejects_out_of_range_index():
     with pytest.raises(RuleOperationError, match="out of range"):
         remove_rule(RuleSet(rules=[]), 0)
+
+
+def test_duplicate_rule_inserts_copy_after_selected_rule():
+    original = RuleSet(rules=[make_rule("a"), make_rule("b")])
+
+    updated = duplicate_rule(original, 0)
+
+    assert [rule.name for rule in original.rules] == ["a", "b"]
+    assert [rule.name for rule in updated.rules] == ["a", "a copy", "b"]
+    assert updated.rules[1].image == "images/a.png"
+
+
+def test_duplicate_rule_uses_unique_copy_name():
+    original = RuleSet(
+        rules=[
+            make_rule("a"),
+            make_rule("a copy"),
+            make_rule("a copy 2"),
+        ]
+    )
+
+    updated = duplicate_rule(original, 0)
+
+    assert [rule.name for rule in updated.rules] == ["a", "a copy 3", "a copy", "a copy 2"]
+
+
+def test_duplicate_rule_rejects_out_of_range_index():
+    with pytest.raises(RuleOperationError, match="out of range"):
+        duplicate_rule(RuleSet(rules=[]), 0)
+
+
+def test_move_rule_reorders_rules():
+    original = RuleSet(rules=[make_rule("a"), make_rule("b"), make_rule("c")])
+
+    updated = move_rule(original, 2, 0)
+
+    assert [rule.name for rule in original.rules] == ["a", "b", "c"]
+    assert [rule.name for rule in updated.rules] == ["c", "a", "b"]
+
+
+def test_move_rule_rejects_out_of_range_index():
+    with pytest.raises(RuleOperationError, match="out of range"):
+        move_rule(RuleSet(rules=[make_rule("a")]), 1, 0)
+
+
+def test_move_rule_rejects_out_of_range_target_index():
+    with pytest.raises(RuleOperationError, match="target rule index is out of range"):
+        move_rule(RuleSet(rules=[make_rule("a")]), 0, 1)
+
+
+def test_reorder_rules_reorders_by_original_indices():
+    original = RuleSet(rules=[make_rule("a"), make_rule("b"), make_rule("c")])
+
+    updated = reorder_rules(original, [2, 0, 1])
+
+    assert [rule.name for rule in original.rules] == ["a", "b", "c"]
+    assert [rule.name for rule in updated.rules] == ["c", "a", "b"]
+
+
+def test_reorder_rules_rejects_length_mismatch():
+    with pytest.raises(RuleOperationError, match="length"):
+        reorder_rules(RuleSet(rules=[make_rule("a"), make_rule("b")]), [1])
+
+
+def test_reorder_rules_rejects_duplicate_indices():
+    with pytest.raises(RuleOperationError, match="exactly once"):
+        reorder_rules(RuleSet(rules=[make_rule("a"), make_rule("b")]), [0, 0])
 
 
 def test_make_image_path_relative_converts_path_inside_base_dir(tmp_path):

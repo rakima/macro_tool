@@ -33,6 +33,7 @@ class RuleRunResult:
     matched: bool = False
     triggered: bool = False
     skipped_cooldown: bool = False
+    score: float | None = None
     match: MatchResult | None = None
     click_target: ClickTarget | None = None
     error: str | None = None
@@ -108,7 +109,7 @@ class MacroRunner:
                 continue
 
             try:
-                match = self.detector.detect(screenshot, rule)
+                match = self._find_best_match_for_test(screenshot, rule)
             except DetectionError as error:
                 results.append(
                     RuleRunResult(
@@ -120,11 +121,19 @@ class MacroRunner:
 
             if match is None:
                 results.append(RuleRunResult(rule_name=rule.name))
+            elif match.score < rule.confidence:
+                results.append(
+                    RuleRunResult(
+                        rule_name=rule.name,
+                        score=match.score,
+                    )
+                )
             else:
                 results.append(
                     RuleRunResult(
                         rule_name=rule.name,
                         matched=True,
+                        score=match.score,
                         match=match,
                     )
                 )
@@ -162,6 +171,7 @@ class MacroRunner:
                         rule_name=rule.name,
                         matched=True,
                         triggered=True,
+                        score=match.score,
                         match=match,
                         click_target=click_target,
                     )
@@ -190,3 +200,10 @@ class MacroRunner:
             return capture_frame()
 
         return screenshot_provider.capture()
+
+    def _find_best_match_for_test(self, screenshot: Any, rule: Rule) -> MatchResult | None:
+        find_best_match = getattr(self.detector, "find_best_match", None)
+        if callable(find_best_match):
+            return find_best_match(screenshot, rule)
+
+        return self.detector.detect(screenshot, rule)
