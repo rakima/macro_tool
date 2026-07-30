@@ -3,7 +3,6 @@ import pytest
 
 from app.models import Region
 from app.screenshot import (
-    CapturedScreenshot,
     PyAutoGuiScreenshotProvider,
     ScreenshotError,
     ScreenshotRequest,
@@ -87,7 +86,8 @@ def test_capture_frame_returns_image_with_default_origin_for_custom_function():
 
     frame = provider.capture_frame()
 
-    assert frame == CapturedScreenshot(image=frame.image, origin_x=0, origin_y=0)
+    assert frame.origin_x == 0
+    assert frame.origin_y == 0
     assert frame.image.tolist() == [[[30, 20, 10]]]
 
 
